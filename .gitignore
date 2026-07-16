@@ -1,0 +1,13 @@
+# Configurações locais do Claude Code (específicas da máquina)
+.claude/settings.local.json
+
+# Lixo de SO
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*~

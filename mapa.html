@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Rōnin de Luz — Mapa</title>
+<style>
+  html,body{margin:0;padding:0;background:#02030a}
+  canvas{display:block;width:100vw;height:auto}
+  #err{color:#f88;font:14px monospace;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div id="err"></div>
+<canvas id="map"></canvas>
+<script src="js/Utilities/utils.js?v=9"></script>
+<script src="js/Utilities/audio.js?v=9"></script>
+<script src="js/Utilities/input.js?v=9"></script>
+<script src="js/Graphics/Particles.js?v=9"></script>
+<script src="js/world.js?v=9"></script>
+<script src="js/player.js?v=9"></script>
+<script src="js/enemies.js?v=9"></script>
+<script>
+'use strict';
+// stub do Game para as funções de desenho do mundo
+const Game = {
+  checkpoint: null, essences: 3, bossDefeated: false, fireBossDefeated: false,
+  serpentGone: false, hasDarkKatana: false, amulets: { sui: false, ka: false },
+  equipped: null, wielded: 'light', purified: 0, absorbed: 0,
+  corruption() { return 0; },
+  cam: { shake: 0 }
+};
+try {
+  World.init();
+  Enemies.init();
+
+  const S = 0.35;
+  const MW = World.width, MH = 2440;
+  const canvas = document.getElementById('map');
+  canvas.width = Math.ceil(MW * S);
+  canvas.height = Math.ceil(MH * S);
+  const ctx = canvas.getContext('2d');
+
+  // fundo único (evita emendas de gradiente entre tiles)
+  const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  bg.addColorStop(0, '#0a0e20');
+  bg.addColorStop(0.5, '#0e1a2a');
+  bg.addColorStop(1, '#130a12');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // lua
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = 'rgba(253,243,208,0.9)';
+  ctx.beginPath(); ctx.arc(6900 * S, 160 * S, 40 * S, 0, 7); ctx.fill();
+  ctx.restore();
+
+  // renderiza o mundo em tiles de 960×540 usando as funções reais do jogo
+  for (let ty = 0; ty * 540 < MH; ty++) {
+    for (let tx = 0; tx * 960 < MW; tx++) {
+      const cam = { x: tx * 960, y: ty * 540 };
+      ctx.save();
+      ctx.translate(tx * 960 * S, ty * 540 * S);
+      ctx.scale(S, S);
+      ctx.beginPath();
+      ctx.rect(0, 0, 960, 540);
+      ctx.clip();
+      World.drawWorld(ctx, cam, 30);
+      Enemies.draw(ctx, cam, 30);
+      World.drawWater(ctx, cam, 30);
+      World.drawJets(ctx, cam, 95); // fase de erupção, para aparecerem
+      World.drawLava(ctx, cam, 30);
+      ctx.restore();
+    }
+  }
+
+  // o rōnin no ponto de partida
+  ctx.save();
+  ctx.translate(200 * S, 1200 * S);
+  ctx.scale(S * 2.4, S * 2.4);
+  drawLightSamurai(ctx, 0, 0, 1, { facing: 1, pose: 'idle', t: 30 });
+  ctx.restore();
+
+  // rótulos das zonas
+  const labels = [
+    [560, 1090, 'FLORESTA DAS LANTERNAS'],
+    [1280, 1010, 'TEMPLO ABANDONADO'],
+    [2150, 700, 'RUÍNAS DO VIGIA'],
+    [3200, 1090, 'O VÃO PARTIDO'],
+    [4400, 690, 'BOSQUE SUSPENSO'],
+    [4700, 60, 'COPAS SUSSURRANTES'],
+    [2830, 110, 'PORTAL DO VENTO ◉ (EM BREVE)'],
+    [5610, 800, 'VAPOR TERMAL ↑'],
+    [5560, 1140, 'JARDIM DAS MARÉS'],
+    [5560, 1760, 'PROFUNDEZAS SEM SOL'],
+    [3400, 1720, 'VEIAS AFOGADAS'],
+    [2450, 2180, 'SUI ◆'],
+    [1800, 2140, 'PORTAL DO FOGO ◉'],
+    [6650, 1100, 'VELHO TRONO'],
+    [7250, 1000, 'PORTAL DA AURORA'],
+    [6600, 1660, 'SALÃO AFOGADO'],
+    [7150, 2200, 'TRONO AFOGADO ♛'],
+    [6175, 860, 'PORTÃO SELADO']
+  ];
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const [x, y, txt] of labels) {
+    ctx.font = '700 ' + Math.max(10, 26 * S) + 'px "Segoe UI", sans-serif';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.strokeText(txt, x * S, y * S);
+    ctx.fillStyle = txt.includes('♛') ? '#ffb0a0' : txt.includes('◆') ? '#8fd8ff' : '#ffe9b0';
+    ctx.fillText(txt, x * S, y * S);
+  }
+
+  window._mapReady = true;
+} catch (e) {
+  document.getElementById('err').textContent = e.stack || String(e);
+  window._mapError = String(e);
+}
+</script>
+</body>
+</html>
+
