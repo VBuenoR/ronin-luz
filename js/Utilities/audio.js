@@ -333,6 +333,36 @@ const Sfx = {
     this.noise({ dur: 0.65, vol: 0.35, fc: 3000, fc2: 400, type: 'bandpass', q: 0.7 });
     this.tone({ f: 880, f2: 220, dur: 0.6, type: 'sine', vol: 0.22 });
   },
+  windSlash() {
+    this.noise({ dur: 0.2, vol: 0.3, fc: 5200, fc2: 900, type: 'bandpass', q: 0.9 });
+    this.tone({ f: 1180, f2: 320, dur: 0.18, type: 'triangle', vol: 0.1 });
+  },
+  windGust(heavy) {
+    this.noise({ dur: heavy ? 0.95 : 0.52, vol: heavy ? 0.42 : 0.27,
+      fc: heavy ? 3600 : 2700, fc2: 360, type: 'bandpass', q: 0.65 });
+    this.tone({ f: heavy ? 180 : 420, f2: heavy ? 62 : 150,
+      dur: heavy ? 0.72 : 0.38, type: 'sine', vol: heavy ? 0.14 : 0.09 });
+  },
+  windCharge() {
+    this.tone({ f: 210, f2: 1080, dur: 0.85, type: 'triangle', vol: 0.12 });
+    this.noise({ dur: 0.9, vol: 0.15, fc: 700, fc2: 4200, type: 'bandpass', q: 1.1 });
+  },
+  windLightning(heavy) {
+    this.noise({ dur: heavy ? 0.38 : 0.22, vol: heavy ? 0.48 : 0.34,
+      fc: heavy ? 5800 : 4700, fc2: 260, type: 'bandpass', q: 0.55 });
+    this.tone({ f: heavy ? 96 : 180, f2: 42, dur: heavy ? 0.42 : 0.24,
+      type: 'sawtooth', vol: heavy ? 0.19 : 0.12 });
+  },
+  windPrison() {
+    this.noise({ dur: 0.72, vol: 0.22, fc: 2500, fc2: 480, type: 'bandpass', q: 1.4 });
+    [520, 440, 350].forEach((f, i) => this.tone({ f, f2: f * 0.72, dur: 0.35,
+      type: 'sine', vol: 0.08, delay: i * 0.07 }));
+  },
+  windSupreme() {
+    this.noise({ dur: 1.45, vol: 0.46, fc: 4200, fc2: 240, type: 'bandpass', q: 0.55 });
+    this.tone({ f: 138, f2: 42, dur: 1.2, type: 'sawtooth', vol: 0.18 });
+    this.tone({ f: 720, f2: 210, dur: 0.75, type: 'triangle', vol: 0.1, delay: 0.12 });
+  },
   darkTake() {
     [220, 208, 165, 110, 82].forEach((f, i) => this.tone({ f, dur: 0.7, type: 'triangle', vol: 0.14, delay: i * 0.16 }));
     this.tone({ f: 41, dur: 2.2, type: 'sine', vol: 0.16, delay: 0.3 });

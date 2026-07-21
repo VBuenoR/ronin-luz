@@ -77,6 +77,14 @@ const TerrainSkin = {
       top: '#4a2928', mid: '#2b171a', bottom: '#0d080c',
       edge: 'rgba(190,91,61,0.3)', rock: '#4b2d2a',
       facet: 'rgba(230,132,83,0.27)', root: '#2c211f'
+    },
+    wind: {
+      contactAmp: 0.7, macroFreq: 0.011, microFreq: 0.05, smooth: false,
+      capDepth: 30, capBand: 7, onewayDepth: 19,
+      mossCoverage: 0.26, rockDensity: 0.64, crackDensity: 0.78, rootDensity: 0.08,
+      top: '#6b6e72', mid: '#4a4d54', bottom: '#2a2d34',
+      edge: 'rgba(180,178,168,0.32)', rock: '#7a7870',
+      facet: 'rgba(200,196,182,0.30)', root: '#4a5040'
     }
   },
 
@@ -131,6 +139,7 @@ const TerrainSkin = {
   },
 
   profileIdAt(x, y, mapId) {
+    if (mapId === 'vento') return 'wind';
     if (mapId === 'fogo') return 'fire';
     if (y > 1450) return 'submerged';
     if (x < 1560) return 'forest';

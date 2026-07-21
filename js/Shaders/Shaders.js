@@ -112,6 +112,56 @@ const Shaders = {
   `,
 
   // Aberração Cromática (separa canais RGB)
+  // Bruma de altitude e nuvens procedurais. O efeito e' sutil para preservar
+  // a leitura do pixel art e so' e' ativado no Reino do Vento.
+  WindAtmosphere: `
+    precision mediump float;
+    varying vec2 v_texCoord;
+    uniform sampler2D u_image;
+    uniform float u_time;
+    uniform float u_strength;
+    uniform float u_direction;
+    uniform vec3 u_cloudColor;
+    uniform float u_cloudOpacity;
+    float windNoise(vec2 p) {
+      vec2 cell = floor(p);
+      vec2 local = fract(p);
+      local = local * local * (3.0 - 2.0 * local);
+      float a = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453123);
+      float b = fract(sin(dot(cell + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453123);
+      float c = fract(sin(dot(cell + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453123);
+      float d = fract(sin(dot(cell + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453123);
+      return mix(mix(a, b, local.x), mix(c, d, local.x), local.y);
+    }
+    void main() {
+      vec4 color = texture2D(u_image, v_texCoord);
+      vec2 drift = vec2(u_time * 0.007 * u_direction, u_time * 0.0012);
+      float layerA = windNoise(v_texCoord * vec2(3.5, 4.2) + drift * 0.26);
+      float layerB = windNoise(v_texCoord * vec2(10.0, 8.0) + drift);
+      float clouds = smoothstep(0.56, 0.85, layerA * 0.72 + layerB * 0.28);
+      float horizonFog = smoothstep(0.08, 0.92, v_texCoord.y) * 0.34;
+      float amount = (clouds * 0.30 + horizonFog) * u_cloudOpacity * (0.72 + u_strength * 0.28);
+      gl_FragColor = vec4(mix(color.rgb, u_cloudColor, amount), color.a);
+    }
+  `,
+
+  // Refracao direcional muito leve, usada para tornar a corrente de ar visivel.
+  WindMotion: `
+    precision mediump float;
+    varying vec2 v_texCoord;
+    uniform sampler2D u_image;
+    uniform float u_time;
+    uniform float u_strength;
+    uniform float u_direction;
+    void main() {
+      float bands = sin(v_texCoord.y * 41.0 + u_time * 2.4)
+        + sin(v_texCoord.y * 17.0 - u_time * 1.35) * 0.45;
+      float turbulence = sin(v_texCoord.x * 23.0 + v_texCoord.y * 11.0 + u_time) * 0.18;
+      vec2 offset = vec2((bands + turbulence) * u_strength * u_direction, 0.0);
+      gl_FragColor = texture2D(u_image, clamp(v_texCoord + offset, 0.001, 0.999));
+    }
+  `,
+
   ChromaticAberration: `
     precision mediump float;
     varying vec2 v_texCoord;

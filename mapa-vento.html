@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#d7e3e7">
+<title>Ronin de Luz | Atlas do Reino do Vento</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --sky-0: #dce8ec;
+    --sky-1: #a9bec9;
+    --sky-2: #6f8999;
+    --ink: #102631;
+    --ink-soft: #38515d;
+    --paper: rgba(239, 244, 242, 0.91);
+    --line: rgba(35, 64, 75, 0.24);
+    --gold: #b58a42;
+    --gold-bright: #e1c27c;
+    --electric: #58c6d9;
+    --danger: #b85042;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; min-height: 100%; }
+
+  body {
+    min-height: 100vh;
+    overflow: hidden;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 16% 8%, rgba(255,255,255,0.76), transparent 27%),
+      radial-gradient(circle at 86% 22%, rgba(221,235,239,0.62), transparent 32%),
+      linear-gradient(148deg, var(--sky-0), var(--sky-1) 51%, var(--sky-2));
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.2;
+    background-image:
+      repeating-linear-gradient(0deg, transparent 0 5px, rgba(21,48,58,0.08) 6px),
+      repeating-linear-gradient(90deg, transparent 0 17px, rgba(255,255,255,0.09) 18px);
+    mix-blend-mode: multiply;
+  }
+
+  button { font: inherit; }
+
+  .atlas-shell {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 100vh;
+    padding: 20px;
+    gap: 14px;
+  }
+
+  .atlas-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 24px;
+    padding: 0 4px;
+    animation: reveal 620ms cubic-bezier(.2,.75,.25,1) both;
+  }
+
+  .eyebrow {
+    margin: 0 0 5px;
+    color: var(--ink-soft);
+    font: 700 11px/1.2 "Trebuchet MS", sans-serif;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(29px, 4vw, 52px);
+    font-weight: 500;
+    line-height: 0.94;
+    letter-spacing: -0.045em;
+  }
+
+  .subtitle {
+    max-width: 690px;
+    margin: 9px 0 0;
+    color: var(--ink-soft);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .wind-state {
+    display: grid;
+    grid-template-columns: 46px auto;
+    align-items: center;
+    gap: 11px;
+    min-width: 218px;
+    padding: 10px 14px;
+    border: 1px solid rgba(43,71,80,0.27);
+    background: rgba(237,244,243,0.58);
+    box-shadow: 0 10px 35px rgba(31,53,62,0.11);
+  }
+
+  .compass-mark {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--gold);
+    border-radius: 50%;
+    color: var(--gold);
+    font: 700 20px/1 Georgia, serif;
+    animation: compass-breathe 3.4s ease-in-out infinite;
+  }
+
+  .wind-state strong,
+  .wind-state span { display: block; }
+
+  .wind-state strong {
+    font: 700 11px/1.2 "Trebuchet MS", sans-serif;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .wind-state span {
+    margin-top: 4px;
+    color: var(--ink-soft);
+    font-size: 12px;
+  }
+
+  .atlas-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 286px;
+    min-height: 0;
+    border: 1px solid rgba(31,56,65,0.31);
+    background: rgba(225,235,237,0.37);
+    box-shadow: 0 24px 80px rgba(28,48,57,0.2);
+    animation: reveal 720ms 90ms cubic-bezier(.2,.75,.25,1) both;
+  }
+
+  .map-panel {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    border-right: 1px solid rgba(31,56,65,0.25);
+    background: #9fb4bf;
+    isolation: isolate;
+  }
+
+  .map-viewport {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+    scrollbar-color: rgba(38,69,79,0.58) rgba(234,241,241,0.32);
+    scrollbar-width: thin;
+    cursor: grab;
+    overscroll-behavior: contain;
+  }
+
+  .map-viewport.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+  }
+
+  .map-stage {
+    display: grid;
+    place-items: center;
+    width: max-content;
+    min-width: 100%;
+    min-height: 100%;
+  }
+
+  #map {
+    display: block;
+    max-width: none;
+    box-shadow: 0 0 0 1px rgba(24,49,59,0.22), 0 18px 50px rgba(21,44,53,0.24);
+    animation: map-arrive 760ms 180ms cubic-bezier(.2,.75,.25,1) both;
+  }
+
+  .map-tools {
+    position: absolute;
+    z-index: 3;
+    top: 13px;
+    right: 13px;
+    display: flex;
+    gap: 6px;
+    padding: 5px;
+    border: 1px solid rgba(28,53,63,0.25);
+    background: rgba(238,244,243,0.9);
+    box-shadow: 0 8px 28px rgba(26,49,58,0.16);
+    backdrop-filter: blur(8px);
+  }
+
+  .map-tools button {
+    min-width: 34px;
+    height: 31px;
+    border: 0;
+    color: var(--ink);
+    background: transparent;
+    cursor: pointer;
+    font: 700 14px/1 "Trebuchet MS", sans-serif;
+  }
+
+  .map-tools button:hover,
+  .map-tools button:focus-visible { background: rgba(96,137,151,0.16); outline: none; }
+
+  .map-tools .fit-button {
+    padding: 0 10px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .zoom-readout {
+    display: grid;
+    place-items: center;
+    min-width: 48px;
+    color: var(--ink-soft);
+    font: 700 10px/1 "Trebuchet MS", sans-serif;
+  }
+
+  .map-note {
+    position: absolute;
+    z-index: 3;
+    left: 14px;
+    bottom: 14px;
+    margin: 0;
+    padding: 8px 11px;
+    color: #eaf4f4;
+    background: rgba(18,40,49,0.78);
+    font: 700 10px/1.3 "Trebuchet MS", sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  .loading,
+  .error-box {
+    position: absolute;
+    z-index: 5;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 30px;
+    text-align: center;
+    background: linear-gradient(145deg, #dbe7e9, #8ca5b1);
+  }
+
+  .loading[hidden], .error-box[hidden] { display: none; }
+
+  .loading strong {
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+  }
+
+  .error-box {
+    color: #5b201c;
+    white-space: pre-wrap;
+    font: 13px/1.5 Consolas, monospace;
+  }
+
+  .atlas-sidebar {
+    min-height: 0;
+    overflow: auto;
+    padding: 19px;
+    background:
+      linear-gradient(rgba(244,247,243,0.88), rgba(225,234,231,0.88)),
+      repeating-linear-gradient(0deg, transparent 0 23px, rgba(45,74,82,0.07) 24px);
+  }
+
+  .sidebar-kicker {
+    margin: 0;
+    color: var(--gold);
+    font: 700 10px/1.2 "Trebuchet MS", sans-serif;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .atlas-sidebar h2 {
+    margin: 5px 0 8px;
+    font-size: 25px;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+  }
+
+  .sidebar-copy {
+    margin: 0 0 18px;
+    color: var(--ink-soft);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-bottom: 20px;
+    border: 1px solid var(--line);
+  }
+
+  .stat {
+    min-width: 0;
+    padding: 9px 6px;
+    text-align: center;
+    border-right: 1px solid var(--line);
+  }
+
+  .stat:last-child { border-right: 0; }
+
+  .stat strong {
+    display: block;
+    color: var(--ink);
+    font: 700 16px/1 "Trebuchet MS", sans-serif;
+  }
+
+  .stat span {
+    display: block;
+    margin-top: 5px;
+    color: var(--ink-soft);
+    font: 700 8px/1.1 "Trebuchet MS", sans-serif;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .section-title {
+    margin: 0 0 8px;
+    color: var(--ink-soft);
+    font: 700 9px/1.2 "Trebuchet MS", sans-serif;
+    letter-spacing: 0.19em;
+    text-transform: uppercase;
+  }
+
+  .landmarks { display: grid; gap: 6px; }
+
+  .landmark {
+    display: grid;
+    grid-template-columns: 25px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 8px 9px;
+    border: 1px solid transparent;
+    color: var(--ink);
+    background: rgba(255,255,255,0.27);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .landmark:hover,
+  .landmark:focus-visible {
+    border-color: rgba(40,72,82,0.26);
+    background: rgba(255,255,255,0.58);
+    outline: none;
+  }
+
+  .landmark-index {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--gold);
+    border-radius: 50%;
+    color: #8a672e;
+    font: 700 10px/1 "Trebuchet MS", sans-serif;
+  }
+
+  .landmark-name {
+    overflow: hidden;
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .landmark-arrow { color: var(--gold); font: 700 13px/1 sans-serif; }
+
+  .symbol-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 18px;
+  }
+
+  .symbol {
+    padding: 5px 7px;
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    background: rgba(255,255,255,0.24);
+    font: 700 9px/1.2 "Trebuchet MS", sans-serif;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .symbol::before { margin-right: 5px; color: var(--gold); }
+  .symbol.feather::before { content: "◆"; }
+  .symbol.cloud::before { content: "≋"; color: var(--electric); }
+  .symbol.spirit::before { content: "鳥"; }
+
+  .control-help {
+    margin: 18px 0 0;
+    padding-top: 13px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-soft);
+    font: 10px/1.5 "Trebuchet MS", sans-serif;
+  }
+
+  @keyframes reveal {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes map-arrive {
+    from { opacity: 0; filter: saturate(0.5) blur(4px); }
+    to { opacity: 1; filter: saturate(1) blur(0); }
+  }
+
+  @keyframes compass-breathe {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(181,138,66,0.08); transform: rotate(-2deg); }
+    50% { box-shadow: 0 0 0 7px rgba(181,138,66,0.08); transform: rotate(2deg); }
+  }
+
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    .atlas-shell { min-height: 100dvh; padding: 12px; }
+    .atlas-header { grid-template-columns: 1fr; gap: 12px; }
+    .subtitle { font-size: 12px; }
+    .wind-state { display: none; }
+    .atlas-workspace { grid-template-columns: 1fr; grid-template-rows: minmax(430px, 64dvh) auto; }
+    .map-panel { border-right: 0; border-bottom: 1px solid rgba(31,56,65,0.25); }
+    .atlas-sidebar { overflow: visible; }
+    .landmarks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 560px) {
+    .atlas-shell { padding: 8px; gap: 10px; }
+    .atlas-workspace { grid-template-rows: minmax(390px, 61dvh) auto; }
+    .atlas-sidebar { padding: 15px; }
+    .landmarks { grid-template-columns: 1fr; }
+    .map-note { display: none; }
+    .fit-button { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  }
+</style>
+</head>
+<body>
+<div class="atlas-shell">
+  <header class="atlas-header">
+    <div>
+      <p class="eyebrow">Cartografia imperial 03</p>
+      <h1>Reino do Vento</h1>
+      <p class="subtitle">Das ruínas do templo ao Trono dos Céus. Um atlas fiel à geometria atual da fase, preservando alturas, distâncias e rotas de dash.</p>
+    </div>
+    <div class="wind-state" aria-label="Estado do vento representado no mapa">
+      <div class="compass-mark" aria-hidden="true">E</div>
+      <div>
+        <strong>Calmaria cartográfica</strong>
+        <span>Nuvens eletrizadas ativas</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="atlas-workspace">
+    <section class="map-panel" aria-label="Mapa panorâmico do Reino do Vento">
+      <div class="map-viewport" id="mapViewport" tabindex="0">
+        <div class="map-stage">
+          <canvas id="map" aria-label="Visão geral ilustrada do Reino do Vento"></canvas>
+        </div>
+      </div>
+
+      <div class="map-tools" aria-label="Controles do mapa">
+        <button type="button" id="zoomOut" aria-label="Diminuir zoom">−</button>
+        <span class="zoom-readout" id="zoomReadout">100%</span>
+        <button type="button" id="zoomIn" aria-label="Aumentar zoom">+</button>
+        <button type="button" class="fit-button" id="fitMap">Ajustar</button>
+      </div>
+
+      <p class="map-note">Arraste para explorar • Ctrl + roda altera o zoom</p>
+      <div class="loading" id="loading"><strong>Reconstruindo as correntes do reino...</strong></div>
+      <div class="error-box" id="errorBox" hidden></div>
+    </section>
+
+    <aside class="atlas-sidebar">
+      <p class="sidebar-kicker">Leitura do terreno</p>
+      <h2>Marcos do reino</h2>
+      <p class="sidebar-copy">Selecione um marco para centralizá-lo. A fortaleza é renderizada com seus salões, escadarias e torre do moinho atuais.</p>
+
+      <div class="stat-grid" aria-label="Resumo do mapa">
+        <div class="stat"><strong>5</strong><span>Penas</span></div>
+        <div class="stat"><strong id="spiritCount">3</strong><span>Na fortaleza</span></div>
+        <div class="stat"><strong>1</strong><span>Moinho</span></div>
+      </div>
+
+      <p class="section-title">Navegação</p>
+      <div class="landmarks">
+        <button class="landmark" type="button" data-x="970" data-y="1410"><span class="landmark-index">01</span><span class="landmark-name">Templo do Amuleto</span><span class="landmark-arrow">›</span></button>
+        <button class="landmark" type="button" data-x="1875" data-y="1415"><span class="landmark-index">02</span><span class="landmark-name">Passagem do Dash</span><span class="landmark-arrow">›</span></button>
+        <button class="landmark" type="button" data-x="2700" data-y="1400"><span class="landmark-index">03</span><span class="landmark-name">Ilhas das Ruínas</span><span class="landmark-arrow">›</span></button>
+        <button class="landmark" type="button" data-x="4900" data-y="1640"><span class="landmark-index">04</span><span class="landmark-name">Fortaleza do Moinho</span><span class="landmark-arrow">›</span></button>
+        <button class="landmark" type="button" data-x="3860" data-y="940"><span class="landmark-index">05</span><span class="landmark-name">Nuvens Eletrizadas</span><span class="landmark-arrow">›</span></button>
+        <button class="landmark" type="button" data-x="5120" data-y="260"><span class="landmark-index">06</span><span class="landmark-name">Trono dos Céus</span><span class="landmark-arrow">›</span></button>
+        <button class="landmark" type="button" data-x="6350" data-y="860"><span class="landmark-index">07</span><span class="landmark-name">Torre Oriental</span><span class="landmark-arrow">›</span></button>
+        <button class="landmark" type="button" data-x="6620" data-y="2190"><span class="landmark-index">08</span><span class="landmark-name">Ilha Baixa</span><span class="landmark-arrow">›</span></button>
+      </div>
+
+      <div class="symbol-list" aria-label="Legenda">
+        <span class="symbol feather">Santuário da pena</span>
+        <span class="symbol cloud">Nuvem ativa</span>
+        <span class="symbol spirit">Espírito do vento</span>
+      </div>
+      <p class="control-help">Use os botões de zoom ou segure Ctrl enquanto gira a roda do mouse. O botão Ajustar retorna à visão completa.</p>
+    </aside>
+  </main>
+</div>
+
+<script src="js/Utilities/utils.js?v=9"></script>
+<script src="js/Utilities/audio.js?v=17"></script>
+<script src="js/Utilities/input.js?v=12"></script>
+<script src="js/Graphics/Particles.js?v=20"></script>
+<script src="js/Graphics/VFXSystem.js?v=8"></script>
+<script src="js/Graphics/Lighting.js?v=16"></script>
+<script src="js/Graphics/Sprites.js?v=19"></script>
+<script src="js/Graphics/TreeSystem.js?v=4"></script>
+<script src="js/Graphics/TerrainSkin.js?v=6"></script>
+<script src="js/Graphics/SecondaryFormsSystem.js?v=4"></script>
+<script src="js/Graphics/BioluminescentFloraSystem.js?v=2"></script>
+<script src="js/world.js?v=26"></script>
+<script src="js/player.js?v=23"></script>
+<script src="js/enemies.js?v=14"></script>
+<script src="js/WindKingdom.js?v=17"></script>
+<script src="js/WindFortress.js?v=2"></script>
+<script>
+'use strict';
+
+window.WIND_MAP_PREVIEW = true;
+
+const Game = {
+  checkpoint: null,
+  essences: 3,
+  bossDefeated: false,
+  fireBossDefeated: false,
+  windBossDefeated: false,
+  serpentGone: false,
+  hasDarkKatana: false,
+  amulets: { sui: false, ka: false, wind: false },
+  equipped: 'wind',
+  wielded: 'light',
+  purified: 0,
+  absorbed: 0,
+  frames: 420,
+  wipe: null,
+  player: { x: 4390, y: 2180, w: 20, h: 34, sta: 10, maxSta: 10 },
+  corruption() { return 0; },
+  cam: { shake: 0 },
+  respawn() {},
+  startWipe() {}
+};
+
+const Hud = { toast() {}, showBanner() {} };
+
+const BASE_SCALE = 0.36;
+const MAP_HEIGHT = 2440;
+let mapZoom = 1;
+
+function roundRectPath(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawAtlasSky(ctx, width, height, worldWidth) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, '#6c879a');
+  gradient.addColorStop(0.28, '#9eb4c1');
+  gradient.addColorStop(0.66, '#d3dde1');
+  gradient.addColorStop(1, '#edf1ef');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.save();
+  for (let index = 0; index < 28; index++) {
+    const worldX = (190 + index * 563) % worldWidth;
+    const worldY = 90 + ((index * 347) % 2220);
+    const radius = 180 + ((index * 67) % 220);
+    const x = worldX * BASE_SCALE;
+    const y = worldY * BASE_SCALE;
+    const rx = radius * BASE_SCALE;
+    const ry = rx * (0.2 + (index % 4) * 0.025);
+    const cloud = ctx.createRadialGradient(x, y, 2, x, y, rx);
+    cloud.addColorStop(0, index % 3 === 0 ? 'rgba(255,255,255,0.38)' : 'rgba(236,244,247,0.29)');
+    cloud.addColorStop(1, 'rgba(238,246,248,0)');
+    ctx.fillStyle = cloud;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.lineWidth = 1;
+  for (let band = 0; band < 9; band++) {
+    const y = (210 + band * 262) * BASE_SCALE;
+    ctx.strokeStyle = `rgba(238,247,249,${0.13 + (band % 3) * 0.025})`;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    for (let x = 0; x <= width + 120; x += 120) {
+      ctx.quadraticCurveTo(x + 60, y - 8 - (band % 2) * 5, x + 120, y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function renderWorldTiles(ctx, worldWidth) {
+  const tileWidth = 960;
+  const tileHeight = 540;
+  const columns = Math.ceil(worldWidth / tileWidth);
+  const rows = Math.ceil(MAP_HEIGHT / tileHeight);
+
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const camera = { x: column * tileWidth, y: row * tileHeight };
+      Game.player.x = camera.x + tileWidth / 2;
+      Game.player.y = camera.y + tileHeight / 2;
+
+      ctx.save();
+      ctx.translate(camera.x * BASE_SCALE, camera.y * BASE_SCALE);
+      ctx.scale(BASE_SCALE, BASE_SCALE);
+      ctx.beginPath();
+      ctx.rect(0, 0, tileWidth, tileHeight);
+      ctx.clip();
+      World.drawWorld(ctx, camera, Game.frames);
+      Enemies.draw(ctx, camera, Game.frames);
+      ctx.restore();
+    }
+  }
+}
+
+function drawPlayerMarker(ctx) {
+  ctx.save();
+  ctx.translate((WindKingdom.returnPortal.x + 120) * BASE_SCALE, WindKingdom.returnPortal.y * BASE_SCALE);
+  ctx.scale(BASE_SCALE * 1.35, BASE_SCALE * 1.35);
+  drawLightSamurai(ctx, 0, 0, 1, { facing: 1, pose: 'idle', t: Game.frames, amulet: 'wind' });
+  ctx.restore();
+}
+
+function drawRoute(ctx) {
+  const points = [
+    [4390, 2180], [3380, 2070], [2910, 1660], [2580, 1400],
+    [1875, 1415], [1050, 1410], [3370, 940], [3940, 600],
+    [4900, 1360], [5120, 260], [6250, 860], [7250, 300]
+  ];
+
+  ctx.save();
+  ctx.scale(BASE_SCALE, BASE_SCALE);
+  ctx.setLineDash([16, 18]);
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(223,194,124,0.34)';
+  ctx.beginPath();
+  points.forEach(([x, y], index) => index ? ctx.lineTo(x, y - 34) : ctx.moveTo(x, y - 34));
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLabels(ctx) {
+  const labels = [
+    { x: 4270, y: 2180, tx: 4270, ty: 2305, text: 'PORTAL DE ENTRADA', tone: 'entry' },
+    { x: 970, y: 1410, tx: 970, ty: 1290, text: 'TEMPLO DO AMULETO', tone: 'gold' },
+    { x: 1875, y: 1415, tx: 1875, ty: 1320, text: 'PASSAGEM DO DASH', tone: 'electric' },
+    { x: 2680, y: 1400, tx: 2680, ty: 1300, text: 'ILHAS DAS RUÍNAS', tone: 'normal' },
+    { x: 4900, y: 1360, tx: 4900, ty: 1240, text: 'FORTALEZA DO MOINHO', tone: 'gold' },
+    { x: 3860, y: 940, tx: 3550, ty: 850, text: 'NUVENS ELETRIZADAS', tone: 'electric' },
+    { x: 5120, y: 260, tx: 5120, ty: 145, text: 'TRONO DOS CÉUS', tone: 'throne' },
+    { x: 6350, y: 860, tx: 6500, ty: 760, text: 'TORRE ORIENTAL', tone: 'normal' },
+    { x: 7250, y: 300, tx: 7080, ty: 175, text: 'ILHA SUPERIOR', tone: 'gold' },
+    { x: 6620, y: 2190, tx: 6620, ty: 2300, text: 'ILHA BAIXA', tone: 'normal' }
+  ];
+
+  const colors = {
+    normal: '#edf5f5',
+    entry: '#dbeaed',
+    gold: '#f0d89b',
+    throne: '#f4c982',
+    electric: '#b9f3f5'
+  };
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 11px "Trebuchet MS", sans-serif';
+
+  for (const label of labels) {
+    const anchorX = label.x * BASE_SCALE;
+    const anchorY = label.y * BASE_SCALE;
+    const textX = label.tx * BASE_SCALE;
+    const textY = label.ty * BASE_SCALE;
+    const textWidth = ctx.measureText(label.text).width;
+    const width = textWidth + 18;
+    const height = 23;
+
+    ctx.strokeStyle = 'rgba(19,43,52,0.52)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(anchorX, anchorY);
+    ctx.lineTo(textX, textY + (label.ty < label.y ? height / 2 : -height / 2));
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(16,38,47,0.82)';
+    roundRectPath(ctx, textX - width / 2, textY - height / 2, width, height, 4);
+    ctx.fill();
+    ctx.strokeStyle = label.tone === 'electric' ? 'rgba(88,198,217,0.62)' : 'rgba(220,194,132,0.44)';
+    ctx.stroke();
+
+    ctx.fillStyle = colors[label.tone] || colors.normal;
+    ctx.fillText(label.text, textX, textY + 0.5);
+
+    ctx.fillStyle = label.tone === 'electric' ? '#69d4df' : '#d5b56d';
+    ctx.beginPath();
+    ctx.arc(anchorX, anchorY, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function setZoom(nextZoom) {
+  const viewport = document.getElementById('mapViewport');
+  const canvas = document.getElementById('map');
+  const oldWidth = canvas.width * mapZoom;
+  const oldHeight = canvas.height * mapZoom;
+  const centerX = oldWidth > 0 ? (viewport.scrollLeft + viewport.clientWidth / 2) / oldWidth : 0.5;
+  const centerY = oldHeight > 0 ? (viewport.scrollTop + viewport.clientHeight / 2) / oldHeight : 0.5;
+
+  mapZoom = U.clamp(nextZoom, 0.1, 1.5);
+  canvas.style.width = `${Math.round(canvas.width * mapZoom)}px`;
+  canvas.style.height = `${Math.round(canvas.height * mapZoom)}px`;
+  document.getElementById('zoomReadout').textContent = `${Math.round(mapZoom * 100)}%`;
+
+  viewport.scrollLeft = centerX * canvas.width * mapZoom - viewport.clientWidth / 2;
+  viewport.scrollTop = centerY * canvas.height * mapZoom - viewport.clientHeight / 2;
+}
+
+function fitMap() {
+  const viewport = document.getElementById('mapViewport');
+  const canvas = document.getElementById('map');
+  const fit = Math.min(
+    (viewport.clientWidth - 34) / canvas.width,
+    (viewport.clientHeight - 34) / canvas.height,
+    1
+  );
+  setZoom(fit);
+  viewport.scrollLeft = Math.max(0, (canvas.width * mapZoom - viewport.clientWidth) / 2);
+  viewport.scrollTop = Math.max(0, (canvas.height * mapZoom - viewport.clientHeight) / 2);
+}
+
+function focusLandmark(worldX, worldY) {
+  const viewport = document.getElementById('mapViewport');
+  if (mapZoom < 0.82) setZoom(0.82);
+  const left = worldX * BASE_SCALE * mapZoom - viewport.clientWidth / 2;
+  const top = worldY * BASE_SCALE * mapZoom - viewport.clientHeight / 2;
+  viewport.scrollTo({ left, top, behavior: 'smooth' });
+}
+
+function installMapControls() {
+  const viewport = document.getElementById('mapViewport');
+  const canvas = document.getElementById('map');
+  let dragging = false;
+  let pointerX = 0;
+  let pointerY = 0;
+  let startLeft = 0;
+  let startTop = 0;
+
+  document.getElementById('zoomOut').addEventListener('click', () => setZoom(mapZoom - 0.12));
+  document.getElementById('zoomIn').addEventListener('click', () => setZoom(mapZoom + 0.12));
+  document.getElementById('fitMap').addEventListener('click', fitMap);
+
+  document.querySelectorAll('.landmark').forEach((button) => {
+    button.addEventListener('click', () => focusLandmark(Number(button.dataset.x), Number(button.dataset.y)));
+  });
+
+  viewport.addEventListener('wheel', (event) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    setZoom(mapZoom + (event.deltaY < 0 ? 0.1 : -0.1));
+  }, { passive: false });
+
+  viewport.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    dragging = true;
+    pointerX = event.clientX;
+    pointerY = event.clientY;
+    startLeft = viewport.scrollLeft;
+    startTop = viewport.scrollTop;
+    viewport.classList.add('is-dragging');
+    viewport.setPointerCapture(event.pointerId);
+  });
+
+  viewport.addEventListener('pointermove', (event) => {
+    if (!dragging) return;
+    viewport.scrollLeft = startLeft - (event.clientX - pointerX);
+    viewport.scrollTop = startTop - (event.clientY - pointerY);
+  });
+
+  const stopDragging = (event) => {
+    if (!dragging) return;
+    dragging = false;
+    viewport.classList.remove('is-dragging');
+    if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+  };
+
+  viewport.addEventListener('pointerup', stopDragging);
+  viewport.addEventListener('pointercancel', stopDragging);
+  canvas.addEventListener('dragstart', (event) => event.preventDefault());
+
+  window.addEventListener('resize', () => {
+    if (mapZoom < 0.8) fitMap();
+  });
+}
+
+try {
+  World.init();
+  Enemies.init();
+  WindKingdom.install();
+  World.load('vento');
+  World.setDecorActors(Enemies.list);
+
+  WindKingdom.phase = 'calm';
+  WindKingdom.phaseT = 0;
+  WindKingdom.cycleDir = 1;
+  WindKingdom.t = Game.frames;
+  WindKingdom.cloudOffset = 260;
+
+  const worldWidth = World.width;
+  const canvas = document.getElementById('map');
+  canvas.width = Math.ceil(worldWidth * BASE_SCALE);
+  canvas.height = Math.ceil(MAP_HEIGHT * BASE_SCALE);
+  canvas.style.width = `${canvas.width}px`;
+  canvas.style.height = `${canvas.height}px`;
+  const ctx = canvas.getContext('2d');
+
+  drawAtlasSky(ctx, canvas.width, canvas.height, worldWidth);
+  renderWorldTiles(ctx, worldWidth);
+  drawRoute(ctx);
+  drawPlayerMarker(ctx);
+  drawLabels(ctx);
+
+  const fortressIds = new Set(['fortressBase', 'grandHallFloor', 'millDeckEast']);
+  const fortressSpirits = Enemies.list.filter((enemy) => enemy.map === 'vento'
+    && enemy.tier === 8 && fortressIds.has(enemy.windPlatformId));
+  document.getElementById('spiritCount').textContent = fortressSpirits.length;
+
+  installMapControls();
+  document.getElementById('loading').hidden = true;
+  window._windMapReady = true;
+  requestAnimationFrame(fitMap);
+} catch (error) {
+  document.getElementById('loading').hidden = true;
+  const box = document.getElementById('errorBox');
+  box.hidden = false;
+  box.textContent = `Não foi possível reconstruir o mapa.\n\n${error.stack || String(error)}`;
+  window._windMapError = String(error);
+}
+</script>
+</body>
+</html>

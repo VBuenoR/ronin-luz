@@ -3,15 +3,15 @@
 // soco: golpe comum · mare: golpe pesado elemental — defenda ou sofra
 // fly: voadores desferem rajadas de golpes consecutivos (hits × soco)
 const TIERS = {
-  1:  { name: 'Ashigaru das Águas',            short: 'o Ashigaru', hp: 32,  soco: 7,  mare: 15, xp: 12,  kanji: '水', element: 'agua' },
-  2:  { name: 'Lanceiro da Correnteza',        short: 'o Lanceiro', hp: 44,  soco: 9,  mare: 19, xp: 18,  kanji: '流', element: 'agua' },
-  3:  { name: 'Guardião do Lago',              short: 'o Guardião', hp: 58,  soco: 10, mare: 22, xp: 26,  kanji: '湖', element: 'agua' },
-  4:  { name: 'Abissal das Profundezas',       short: 'o Abissal',  hp: 63,  soco: 11, mare: 24, xp: 34,  kanji: '淵', element: 'agua' },
-  9:  { name: 'Suijin, o Shōgun Afogado',      short: 'o Shōgun',   hp: 180, soco: 10, mare: 20, xp: 90,  kanji: '王', element: 'agua', boss: true },
-  5:  { name: 'Vespa de Magma',                short: 'a Vespa',    hp: 55,  soco: 3,  mare: 15, xp: 40,  kanji: '蜂', element: 'fogo', fly: true, hits: 3 },
-  7:  { name: 'Yūrei da Névoa',                short: 'o Yūrei',    hp: 52,  soco: 9,  mare: 16, xp: 42,  kanji: '霧', element: 'agua', fly: true, mist: true },
-  6:  { name: 'Oni de Obsidiana',              short: 'o Oni',      hp: 75,  soco: 12, mare: 28, xp: 48,  kanji: '鬼', element: 'fogo' },
-  10: { name: 'Kagutsuchi, o Shōgun das Cinzas', short: 'o Shōgun das Cinzas', hp: 200, soco: 14, mare: 25, xp: 130, kanji: '炎', element: 'fogo', boss: true }
+  1:  { name: 'Ashigaru das Águas',            short: 'o Ashigaru', hp: 32,  soco: 7,  mare: 15, xp: 9,  kanji: '水', element: 'agua' },
+  2:  { name: 'Lanceiro da Correnteza',        short: 'o Lanceiro', hp: 44,  soco: 9,  mare: 19, xp: 14, kanji: '流', element: 'agua' },
+  3:  { name: 'Guardião do Lago',              short: 'o Guardião', hp: 58,  soco: 10, mare: 22, xp: 20, kanji: '湖', element: 'agua' },
+  4:  { name: 'Abissal das Profundezas',       short: 'o Abissal',  hp: 63,  soco: 11, mare: 24, xp: 26, kanji: '淵', element: 'agua' },
+  9:  { name: 'Suijin, o Shōgun Afogado',      short: 'o Shōgun',   hp: 180, soco: 10, mare: 20, xp: 68, kanji: '王', element: 'agua', boss: true },
+  5:  { name: 'Vespa de Magma',                short: 'a Vespa',    hp: 55,  soco: 3,  mare: 15, xp: 30, kanji: '蜂', element: 'fogo', fly: true, hits: 3 },
+  7:  { name: 'Yūrei da Névoa',                short: 'o Yūrei',    hp: 52,  soco: 9,  mare: 16, xp: 32, kanji: '霧', element: 'agua', fly: true, mist: true },
+  6:  { name: 'Oni de Obsidiana',              short: 'o Oni',      hp: 75,  soco: 12, mare: 28, xp: 36, kanji: '鬼', element: 'fogo' },
+  10: { name: 'Kagutsuchi, o Shōgun das Cinzas', short: 'o Shōgun das Cinzas', hp: 200, soco: 14, mare: 25, xp: 98, kanji: '炎', element: 'fogo', boss: true }
 };
 
 // (drawWaterSamurai e drawFireSamurai foram unificados e movidos para js/Graphics/Sprites.js)
@@ -22,13 +22,31 @@ const TIERS = {
 const EnemyVFX = {
   style(enemy) {
     const fire = enemy.element === 'fogo';
+    const ancestral = enemy.lightKind === 'blueFire' || enemy.archetype === 'ashSkeleton' || enemy.archetype === 'ancientGolem';
+    const wind = enemy.element === 'vento';
+    const storm = wind && (!!enemy.storm || enemy.tier === 12 || !!enemy.stormPhase);
     const mist = !!enemy.mist || enemy.tier === 7;
     const abyss = enemy.tier === 4;
     return {
-      fire, mist, abyss,
-      core: fire ? 'rgba(255,226,170,0.96)' : mist ? 'rgba(232,228,255,0.9)' : abyss ? 'rgba(155,190,255,0.9)' : 'rgba(205,246,255,0.94)',
-      accent: fire ? 'rgba(255,128,62,0.94)' : mist ? 'rgba(190,168,255,0.82)' : abyss ? 'rgba(82,116,224,0.9)' : 'rgba(88,194,255,0.92)',
-      soft: fire ? 'rgba(255,150,76,0.5)' : mist ? 'rgba(215,230,255,0.32)' : abyss ? 'rgba(98,132,235,0.38)' : 'rgba(132,218,255,0.48)'
+      fire, ancestral, wind, storm, mist, abyss,
+      core: ancestral ? 'rgba(220,250,255,0.98)'
+        : fire ? 'rgba(255,226,170,0.96)'
+        : storm ? 'rgba(220,248,255,0.98)'
+        : wind ? 'rgba(240,248,245,0.96)'
+        : mist ? 'rgba(232,228,255,0.9)'
+        : abyss ? 'rgba(155,190,255,0.9)' : 'rgba(205,246,255,0.94)',
+      accent: ancestral ? 'rgba(55,182,255,0.96)'
+        : fire ? 'rgba(255,128,62,0.94)'
+        : storm ? 'rgba(105,185,245,0.94)'
+        : wind ? 'rgba(150,200,190,0.92)'
+        : mist ? 'rgba(190,168,255,0.82)'
+        : abyss ? 'rgba(82,116,224,0.9)' : 'rgba(88,194,255,0.92)',
+      soft: ancestral ? 'rgba(35,112,255,0.48)'
+        : fire ? 'rgba(255,150,76,0.5)'
+        : storm ? 'rgba(72,116,176,0.48)'
+        : wind ? 'rgba(200,225,215,0.45)'
+        : mist ? 'rgba(215,230,255,0.32)'
+        : abyss ? 'rgba(98,132,235,0.38)' : 'rgba(132,218,255,0.48)'
     };
   },
 
@@ -50,6 +68,15 @@ const EnemyVFX = {
         Particles.spawn({ x: enemy.x + U.rand(-15, 15), y: top + U.rand(-9, 20),
           vx: U.rand(-0.28, 0.28), vy: U.rand(-0.22, 0.22), life: 42, size: U.rand(4, 7),
           color: s.soft, type: 'wisp', drag: 0.98 });
+      }
+      return;
+    }
+    if (s.wind) {
+      const windTick = Math.floor(enemy.t);
+      if (windTick % (s.storm ? 5 : 8) === 0) {
+        Particles.spawn({ x: enemy.x + U.rand(-14, 14), y: top + U.rand(-6, 22),
+          vx: U.rand(-1.7, -0.55), vy: U.rand(-0.35, 0.35), life: 28, size: U.rand(1.4, 2.4),
+          color: windTick % 2 ? s.core : s.accent, type: s.storm ? 'spark' : 'wisp', drag: 0.97 });
       }
       return;
     }
@@ -101,6 +128,11 @@ const EnemyVFX = {
       Particles.spawn({ x: x + U.rand(-24, 24), y: y - 42 + U.rand(-24, 20),
         vx: U.rand(-0.3, 0.3), vy: U.rand(-0.15, 0.15), life: 42, size: U.rand(5, 9),
         color: s.soft, type: 'wisp', drag: 0.98 });
+    } else if (s.wind && time % (s.storm ? 5 : 8) === 0) {
+      Particles.spawn({ x: x + U.rand(-22, 22), y: y - 54 + U.rand(-20, 22),
+        vx: U.rand(-1.8, -0.5), vy: U.rand(-0.35, 0.35), life: 28,
+        size: U.rand(1.5, 2.6), color: time % 2 ? s.core : s.accent,
+        type: s.storm ? 'spark' : 'wisp', drag: 0.97 });
     } else if (enemy.fly && time % 7 === 0) {
       Particles.spawn({ x: x + U.rand(-16, 16), y: y - 56 + U.rand(-8, 18),
         vx: U.rand(-0.35, 0.35), vy: U.rand(0.15, 0.7), life: 26, size: 1.9,
@@ -190,10 +222,28 @@ class FieldEnemy {
     const cfg = TIERS[this.tier];
     this.element = cfg.element || 'agua';
     this.fly = !!cfg.fly;
+    this.archetype = this.archetype || cfg.archetype || null;
+    this.lightKind = this.lightKind || cfg.lightKind || null;
+    this.miniBoss = !!(this.miniBoss || cfg.miniBoss);
+    this.isBoss = !!(this.isBoss || cfg.boss);
     this.t = U.rand(0, 100);
     this.homeX = this.x; this.homeY = this.y;
-    this.w = this.isBoss ? 84 : 30;
-    this.h = this.isBoss ? 104 : (this.fly ? 52 : 42);
+    if (this.archetype === 'ancientGolem') {
+      this.w = 68;
+      this.h = 98;
+    } else if (this.archetype === 'ashSkeleton') {
+      this.w = 34;
+      this.h = 50;
+    } else {
+      this.w = this.isBoss ? 84 : 30;
+      this.h = this.isBoss ? 104 : (this.fly ? 52 : 42);
+    }
+    this.jumpV = 0;
+    this.pounceVX = 0;
+    this.pounceCharge = 0;
+    this.pounceCooldown = Math.floor(U.rand(20, 70));
+    this.recoverT = 0;
+    this.fieldPose = 'idle';
   }
 
   get rect() { return { x: this.x - this.w / 2, y: this.y - this.h, w: this.w, h: this.h }; }
@@ -208,6 +258,11 @@ class FieldEnemy {
     if (this.isBoss) {
       EnemyVFX.fieldAmbient(this);
       return; // o chefe aguarda, imóvel como o lago
+    }
+    if (this.archetype === 'ashSkeleton') {
+      this.updateAshSkeleton(p);
+      EnemyVFX.fieldAmbient(this);
+      return;
     }
 
     const nearY = (this.swim || this.fly) ? 140 : 95;
@@ -239,6 +294,88 @@ class FieldEnemy {
     EnemyVFX.fieldAmbient(this);
   }
 
+  /**
+   * O Esqueleto não desliza pelo chão: ele comprime o corpo, fixa a posição
+   * do jogador e salta. O alvo não muda no ar, deixando o bote legível e
+   * possível de esquivar. Os limites ficam inteiramente nas faixas seguras do
+   * corredor, portanto ele nunca pousa no fogo, poço ou espinhos.
+   */
+  updateAshSkeleton(p) {
+    const dx = p.x - this.x;
+    const sameLevel = Math.abs(p.y - this.homeY) < 105;
+    const near = sameLevel && Math.abs(dx) < 205 && this.cool <= 0;
+    if (this.pounceCooldown > 0) this.pounceCooldown--;
+
+    if (this.state === 'ambush') {
+      this.fieldPose = 'crouch';
+      this.pounceCharge--;
+      this.alert = Math.min(24, this.alert + 2);
+      if (this.pounceCharge <= 0) {
+        const targetX = U.clamp(p.x, this.min, this.max);
+        this.dir = targetX >= this.x ? 1 : -1;
+        this.pounceVX = U.clamp((targetX - this.x) / 26, -5.2, 5.2);
+        if (Math.abs(this.pounceVX) < 2.8) this.pounceVX = this.dir * 2.8;
+        this.jumpV = -7.1;
+        this.state = 'pounce';
+        this.fieldPose = 'jump';
+        Sfx.tone({ f: 410, f2: 690, dur: 0.16, type: 'triangle', vol: 0.07 });
+      }
+    } else if (this.state === 'recover') {
+      this.fieldPose = 'crouch';
+      this.recoverT--;
+      if (this.recoverT <= 0) this.state = 'patrol';
+    } else if (this.state === 'pounce' || this.state === 'hop') {
+      this.fieldPose = this.state === 'pounce' ? 'attack' : 'jump';
+      this.x += this.pounceVX;
+      this.pounceVX *= 0.975;
+    } else if (near && this.pounceCooldown <= 0) {
+      this.state = 'ambush';
+      this.fieldPose = 'crouch';
+      this.pounceCharge = 24;
+      this.dir = dx >= 0 ? 1 : -1;
+      this.alert = 12;
+      EnemyVFX.alert(this);
+    } else {
+      this.state = 'patrol';
+      this.fieldPose = 'idle';
+      this.alert = Math.max(0, this.alert - 1);
+      if (this.t % (near ? 62 : 88) < 1) {
+        this.dir = near ? (dx >= 0 ? 1 : -1) : this.dir;
+        this.jumpV = near ? -5.2 : -4.3;
+        this.pounceVX = this.dir * (near ? 1.65 : 1.05);
+        this.state = 'hop';
+        this.fieldPose = 'jump';
+      }
+    }
+
+    if (this.jumpV !== 0 || this.y < this.homeY) {
+      this.y += this.jumpV;
+      this.jumpV += 0.43;
+      if (this.y >= this.homeY && this.jumpV > 0) {
+        this.y = this.homeY;
+        this.jumpV = 0;
+        this.pounceVX = 0;
+        if (this.state === 'pounce') {
+          this.state = 'recover';
+          this.recoverT = 24;
+          this.pounceCooldown = 96;
+          this.fieldPose = 'crouch';
+          Particles.burst(this.x, this.y - 3, 7, () => ({
+            x: this.x + U.rand(-10, 10), y: this.y - U.rand(0, 6),
+            vx: U.rand(-1.3, 1.3), vy: U.rand(-1.2, -0.2),
+            life: 22, size: 1.8, color: 'rgba(110,205,255,0.75)', type: 'wisp'
+          }));
+        } else {
+          this.state = 'patrol';
+          this.fieldPose = 'idle';
+        }
+      }
+    }
+
+    if (this.x <= this.min) { this.x = this.min; this.dir = 1; }
+    if (this.x >= this.max) { this.x = this.max; this.dir = -1; }
+  }
+
   revive() {
     this.dead = false;
     this.absorbed = false;
@@ -247,13 +384,21 @@ class FieldEnemy {
     this.y = this.homeY;
     this.dir = -1;
     this.state = 'patrol';
+    this.fieldPose = 'idle';
+    this.jumpV = 0;
+    this.pounceVX = 0;
+    this.pounceCharge = 0;
+    this.pounceCooldown = 70;
+    this.recoverT = 0;
     this.alert = 0;
     this.cool = 130; // trégua enquanto se reforma
     Particles.burst(this.x, this.y - 24, 18, () => ({
       x: this.x + U.rand(-14, 14), y: this.y - 24 + U.rand(-18, 18),
       vx: U.rand(-1.5, 1.5), vy: U.rand(-2, 0.5),
       life: 44, size: 2.6,
-      color: this.element === 'fogo' ? 'rgba(255,150,70,0.9)' : 'rgba(140,210,255,0.9)',
+      color: this.lightKind === 'blueFire'
+        ? 'rgba(95,205,255,0.94)'
+        : (this.element === 'fogo' ? 'rgba(255,150,70,0.9)' : 'rgba(140,210,255,0.9)'),
       type: 'wisp'
     }));
     EnemyVFX.revive(this);
@@ -284,12 +429,26 @@ class FieldEnemy {
       return;
     }
 
-    const drawFn = this.element === 'fogo' ? drawFireSamurai : drawWaterSamurai;
-    drawFn(ctx, sx, sy, this.isBoss ? 2.6 : 1.05, this.tier, {
-      t: this.t,
-      pose: this.state === 'chase' ? 'walk' : 'idle',
-      facing: this.dir
-    });
+    if (this.archetype === 'ashSkeleton' && window.drawBlueFlameSkeleton) {
+      drawBlueFlameSkeleton(ctx, sx, sy, 1.02, {
+        t: this.t, pose: this.fieldPose || 'idle', facing: this.dir
+      });
+    } else if (this.archetype === 'ancientGolem' && window.drawAncientFlameGolem) {
+      drawAncientFlameGolem(ctx, sx, sy, 1.55, {
+        t: this.t, pose: 'idle', facing: this.dir
+      });
+    } else {
+      let drawFn = drawWaterSamurai;
+      if (this.element === 'fogo') drawFn = drawFireSamurai;
+      else if (this.element === 'vento') {
+        drawFn = (this.tier === 12 || this.tier === 13) ? drawStormBattleSprite : drawWindBattleSprite;
+      }
+      drawFn(ctx, sx, sy, this.isBoss ? 2.6 : 1.05, this.tier, {
+        t: this.t,
+        pose: this.state === 'chase' ? 'walk' : 'idle',
+        facing: this.dir
+      });
+    }
 
     // "!" de alerta
     if (this.alert > 8 && !this.isBoss) {
@@ -302,7 +461,9 @@ class FieldEnemy {
     }
     // presença do chefe
     if (this.isBoss) {
-      const bc = this.element === 'fogo' ? '255,120,50' : '90,160,255';
+      const bc = this.lightKind === 'blueFire'
+        ? '60,175,255'
+        : (this.element === 'fogo' ? '255,120,50' : '90,160,255');
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const g = ctx.createRadialGradient(sx, sy - 60, 10, sx, sy - 60, 130);

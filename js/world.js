@@ -107,10 +107,9 @@ const World = {
   fireAltar: { x: 1835, y: 1780, taken: false },
 
   checkpoints: [
-    { x: 200, y: 1200 }, { x: 3880, y: 1200 }, { x: 6280, y: 1200 },
-    { x: 5080, y: 2140 },
-    { x: 5750, y: 350 },   // copas, na saída do vapor
-    { x: 6060, y: 2340 }   // entrada do salão afogado
+    { x: 200, y: 1200 },
+    { x: 3880, y: 1200 },
+    { x: 6060, y: 2340 }
   ],
 
   zones: [
@@ -144,10 +143,10 @@ const World = {
     { x: 3050, y: 2080, type: 'crystal', taken: false }
   ],
 
-  gate: { x: 6150, y: 940, w: 46, h: 260, openT: 0, opening: false, cost: 3 },
+  gate: { x: 6150, y: 940, w: 46, h: 260, openT: 1, opening: true, cost: 0 },
   portal: { x: 7250, y: 1120 },
   amulet: { x: 2450, y: 2230, spawned: true, taken: false },
-  windAmulet: { x: 2750, y: 200, taken: false },
+  // O Fū (Amuleto do Vento) vive apenas no Reino do Vento — ver WindKingdom.windAmulet
   darkKatana: { x: 1280, y: 1150, taken: false },
 
   lanterns: [
@@ -170,22 +169,23 @@ const World = {
   maps: null,
   mapFogo: {
     solids: [
-      { x: -60, y: -400, w: 60, h: 1900 },
-      { x: 7400, y: -400, w: 60, h: 1900 },
+      { x: -80, y: -400, w: 80, h: 4400, id: 'fireBoundaryW' },
+      { x: 7400, y: -400, w: 80, h: 4400, id: 'fireBoundaryE' },
       { x: 1620, y: 1540, w: 80, h: 900 },
       { x: 1700, y: 1540, w: 3630, h: 80 },
-      { x: 1700, y: 2280, w: 900, h: 120 },
-      { x: 2900, y: 2280, w: 350, h: 120 },
-      { x: 3510, y: 2280, w: 400, h: 120 },
-      { x: 4190, y: 2280, w: 460, h: 120 },
-      { x: 4900, y: 2140, w: 430, h: 300 },
+      { x: 1700, y: 2280, w: 900, h: 100 },
+      { x: 2900, y: 2280, w: 350, h: 100 },
+      { x: 3510, y: 2280, w: 400, h: 100 },
+      { x: 4190, y: 2280, w: 460, h: 100 },
+      { x: 4900, y: 2140, w: 430, h: 240 },
       { x: 1700, y: 2380, w: 3630, h: 60 },
       { x: 2720, y: 2140, w: 70, h: 240 },
       { x: 3340, y: 2150, w: 70, h: 230 },
       { x: 4010, y: 2150, w: 70, h: 230 },
       { x: 4740, y: 2160, w: 70, h: 220 },
       { x: 1760, y: 1780, w: 150, h: 40 },
-      { x: 5330, y: 1540, w: 80, h: 900 }
+      { x: 5330, y: 1540, w: 80, h: 900 },
+      { x: 0, y: 3800, w: 7400, h: 120, id: 'fireBoundaryFloor' }
     ],
     oneways: [
       { x: 3050, y: 2040, w: 120, h: 16 }, { x: 3620, y: 2020, w: 130, h: 16 }, { x: 4330, y: 2030, w: 120, h: 16 },
@@ -196,10 +196,10 @@ const World = {
     ],
     waters: [], jets: [], updrafts: [],
     lavas: [
-      { x: 2600, y: 2300, w: 300, h: 100 },
-      { x: 3250, y: 2300, w: 260, h: 100 },
-      { x: 3910, y: 2300, w: 280, h: 100 },
-      { x: 4650, y: 2300, w: 250, h: 100 }
+      { x: 2600, y: 2300, w: 300, h: 80 },
+      { x: 3250, y: 2300, w: 260, h: 80 },
+      { x: 3970, y: 2300, w: 220, h: 80 },
+      { x: 4650, y: 2300, w: 250, h: 80 }
     ],
     spikes: [
       { x: 3560, y: 2264, w: 110, h: 16 },
@@ -214,7 +214,9 @@ const World = {
       { x: 2920, y: 2280 }, { x: 2580, y: 2280 }, { x: 2140, y: 2280 }
     ],
     checkpoints: [
-      { x: 5060, y: 2140 }, { x: 2980, y: 2280 }
+      { x: 5060, y: 2140 },
+      { x: 2980, y: 2280 },
+      { x: 1800, y: 1780 }
     ],
     pickups: [
       { x: 3700, y: 2240, type: 'lotus', taken: false },
@@ -237,6 +239,9 @@ const World = {
     this.torches = m.torches;
     this.checkpoints = m.checkpoints;
     this.pickups = m.pickups;
+    this.height = id === 'fogo' && window.AshValley ? AshValley.FIRE_HEIGHT : 2400;
+    this.blueFires = id === 'fogo' && window.AshValley ? AshValley.blueFires : [];
+    this.fossils = id === 'fogo' && window.AshValley ? AshValley.fossils : [];
     // Lista exclusiva do renderer. A física continua consultando this.solids.
     this.renderSolids = this.solids.slice(2);
     this.rebuildDecor(id === 'fogo' ? 777 : 1);
@@ -265,8 +270,14 @@ const World = {
       around(this.amulet, 58, 94, 20);
       around(this.darkKatana, 56, 92, 20);
       for (const lantern of this.lanterns || []) around(lantern, 32, 112, 18, 'soft');
-    } else {
+    } else if (this.current === 'fogo') {
       around(this.fireAltar, 70, 110, 22);
+      if (window.AshValley) {
+        for (const fire of AshValley.blueFires) {
+          const bounds = AshValley.blueFireBounds(fire);
+          add(bounds.x - 20, bounds.y - 20, bounds.x + bounds.w + 20, bounds.y + bounds.h + 20);
+        }
+      }
     }
 
     for (const torch of this.torches || []) around(torch, 30, 74, 18, 'soft');
@@ -308,14 +319,15 @@ const World = {
     const isFire = this.current === 'fogo';
     this.grass = [];
     this.shrooms = [];
-    TerrainSkin.rebuild(this.renderSolids, this.oneways, this.current, 20260702 + salt);
+    const terrainSolids = this.renderSolids.filter((rect) => !rect.ashTunnelShell && !rect.ashTunnelDivider);
+    TerrainSkin.rebuild(terrainSolids, this.oneways, this.current, 20260702 + salt);
     const linkedRects = (TreeSystem.gameplay[this.current] || [])
       .map((item) => item.linkedRect)
       .filter(Boolean);
     const exclusions = this.secondaryExclusions();
     SecondaryFormsSystem.rebuild({
       mapId: this.current,
-      solids: this.renderSolids,
+      solids: terrainSolids,
       oneways: this.oneways,
       seed: 20260702 + salt,
       exclusions,
@@ -324,7 +336,7 @@ const World = {
     if (typeof BioluminescentFloraSystem !== 'undefined') {
       BioluminescentFloraSystem.rebuild({
         mapId: this.current,
-        solids: this.renderSolids,
+        solids: terrainSolids,
         oneways: this.oneways,
         waters: this.waters,
         seed: 20260702 + salt,
@@ -334,7 +346,7 @@ const World = {
           : null
       });
     }
-    const tops = this.renderSolids.concat(this.oneways);
+    const tops = terrainSolids.concat(this.oneways);
     for (const s of tops) {
       const patches = TerrainSkin.mossPatches(s);
       for (let pi = 0; pi < patches.length; pi++) {
@@ -385,6 +397,7 @@ const World = {
   },
 
   init() {
+    if (window.AshValley) AshValley.install(this.mapFogo);
     // Reinicializações futuras podem acontecer após uma troca de reino. Volta
     // às referências canônicas da floresta antes de reconstruir caches visuais.
     const forestMap = this.maps && this.maps.floresta;
@@ -446,6 +459,10 @@ const World = {
   },
 
   palette(x, y) {
+    if (this.current === 'fogo' && window.AshValley) {
+      const valleyPalette = AshValley.paletteAt(y);
+      if (valleyPalette) return valleyPalette;
+    }
     // Reino do Fogo: sempre incandescente
     if (this.current === 'fogo') {
       return { skyT: [22, 7, 8], skyB: [66, 22, 14], fog: [140, 60, 30], moss: [255, 150, 70], tree: [34, 12, 10] };
@@ -552,11 +569,15 @@ const World = {
   // fundo subterrâneo: rocha, estalactites e brasa distante
   drawCaveBackground(ctx, cam, frames) {
     const lava = this.current === 'fogo';
+    const boneBlend = lava && window.AshValley ? AshValley.transitionAt(cam.y + 270) : 0;
     const sky = ctx.createLinearGradient(0, 0, 0, 540);
     if (lava) {
-      sky.addColorStop(0, '#160607');
-      sky.addColorStop(0.6, '#2c0d0a');
-      sky.addColorStop(1, '#4a160d');
+      const top = U.mixRGB([22, 6, 7], [5, 8, 18], boneBlend);
+      const mid = U.mixRGB([44, 13, 10], [11, 18, 34], boneBlend);
+      const bottom = U.mixRGB([74, 22, 13], [16, 33, 58], boneBlend);
+      sky.addColorStop(0, U.rgb(top, 1));
+      sky.addColorStop(0.62, U.rgb(mid, 1));
+      sky.addColorStop(1, U.rgb(bottom, 1));
     } else {
       sky.addColorStop(0, '#020510');
       sky.addColorStop(1, '#0a1c38');
@@ -565,8 +586,9 @@ const World = {
     ctx.fillRect(0, 0, 960, 540);
 
     // brilho da lava subindo do fundo
-    if (lava) {
+    if (lava && boneBlend < 0.995) {
       ctx.save();
+      ctx.globalAlpha = 1 - boneBlend;
       ctx.globalCompositeOperation = 'lighter';
       const g = ctx.createLinearGradient(0, 320, 0, 540);
       g.addColorStop(0, 'rgba(255,110,40,0)');
@@ -578,11 +600,13 @@ const World = {
 
     // A caverna aquática mantém suas estalactites. No Reino do Fogo, as
     // formações angulares do TreeSystem substituem integralmente o legado.
-    const layers = [{ f: 0.3, col: lava ? '#20090a' : '#050b18', n: 12, h: 90 },
-                    { f: 0.6, col: lava ? '#30100c' : '#081226', n: 9, h: 140 }];
+    const layers = [
+      { f: 0.3, hot: [32, 9, 10], cold: [8, 13, 24], col: '#050b18', n: 12, h: 90 },
+      { f: 0.6, hot: [48, 16, 12], cold: [13, 23, 41], col: '#081226', n: 9, h: 140 }
+    ];
     for (let layerIndex = 0; layerIndex < layers.length; layerIndex++) {
       const L = layers[layerIndex];
-      ctx.fillStyle = L.col;
+      ctx.fillStyle = lava ? U.rgb(U.mixRGB(L.hot, L.cold, boneBlend), 1) : L.col;
       // Parallax vertical centrado na altura padrão da caverna (1200)
       const syTop = - (cam.y - 1200) * L.f * 0.28;
       const syBot = 540 - (cam.y - 1200) * L.f * 0.28;
@@ -602,11 +626,17 @@ const World = {
       }
       // Intercala rocha e silhuetas para que a camada distante seja ocluída
       // pela próxima, preservando profundidade real no reino vulcânico.
-      if (lava) TreeSystem.drawFireLayer(ctx, cam, frames, layerIndex);
+      if (lava && boneBlend < 0.995) {
+        ctx.save();
+        ctx.globalAlpha = 1 - boneBlend;
+        TreeSystem.drawFireLayer(ctx, cam, frames, layerIndex);
+        ctx.restore();
+      }
     }
 
     // Haze de separação de profundidade (Depth Fog) na caverna
-    ctx.fillStyle = lava ? 'rgba(44, 13, 10, 0.30)' : 'rgba(10, 28, 56, 0.28)';
+    const haze = lava ? U.mixRGB([44, 13, 10], [22, 50, 88], boneBlend) : [10, 28, 56];
+    ctx.fillStyle = U.rgb(haze, lava ? 0.30 - boneBlend * 0.04 : 0.28);
     ctx.fillRect(0, 0, 960, 540);
   },
 
@@ -657,6 +687,7 @@ const World = {
     SecondaryFormsSystem.drawBack(
       ctx, cam, frames, this.palette(cam.x + 480, cam.y + 270)
     );
+    if (window.AshValley) AshValley.drawBackgroundDetails(ctx, cam, frames);
   },
 
   drawBioluminescentBase(ctx, cam, frames) {
@@ -675,8 +706,12 @@ const World = {
     const pal = this.palette(cam.x + 480, cam.y + 270);
     const view = { x: cam.x - 60, y: cam.y - 60, w: 1080, h: 660 };
 
+    if (window.AshValley) AshValley.drawTunnelShell(ctx, cam);
+    if (window.AshValley) AshValley.drawArchitecture(ctx, cam);
+
     // sólidos
     for (const s of this.renderSolids) {
+      if (s.ashTunnelShell || s.ashTunnelDivider) continue;
       if (!TerrainSkin.isVisible(s, view)) continue;
       if (TerrainSkin.drawSolid(ctx, s, cam, pal)) continue;
       const sx = s.x - cam.x, sy = s.y - cam.y;
@@ -791,16 +826,16 @@ const World = {
       this.drawGate(ctx, cam, frames);
       this.drawPortal(ctx, cam, frames);
       this.drawAmulet(ctx, cam, frames);
-      this.drawWindAmulet(ctx, cam, frames);
       this.drawDarkKatana(ctx, cam, frames);
       this.drawUpdrafts(ctx, cam, frames);
-    } else {
+    } else if (this.current === 'fogo') {
       this.drawFireAltar(ctx, cam, frames);
     }
     this.drawRealmPortals(ctx, cam, frames);
     this.drawPickups(ctx, cam, frames);
     this.drawSpikes(ctx, cam, frames);
     this.drawTorches(ctx, cam, frames);
+    if (window.AshValley) AshValley.drawBlueFireBases(ctx, cam, frames);
   },
 
   // Emissão do terreno é composta após Lighting.draw para não ser apagada.
@@ -862,6 +897,7 @@ const World = {
     ctx.restore();
     SecondaryFormsSystem.drawEmissive(ctx, cam, frames);
     TreeSystem.drawEmissive(ctx, cam, frames, this.current);
+    if (window.AshValley) AshValley.drawTerrainEmissive(ctx, cam, frames);
   },
 
   // coluna de vapor que carrega o jogador para as copas
@@ -897,8 +933,8 @@ const World = {
     const draws = [];
     if (this.current === 'floresta') {
       draws.push({ p: this.firePortal.floresta, col: '255,120,50', kanji: '火', dormant: false });
-      draws.push({ p: this.windPortal, col: '190,215,200', kanji: '風', dormant: true });
-    } else {
+      draws.push({ p: this.windPortal, col: '190,215,200', kanji: '風', dormant: false });
+    } else if (this.current === 'fogo') {
       draws.push({ p: this.firePortal.fogo, col: '140,215,255', kanji: '水', dormant: false });
     }
     for (const d of draws) {
@@ -931,6 +967,32 @@ const World = {
       const sx = sp.x - cam.x, sy = sp.y - cam.y;
       if (sx + sp.w < -20 || sx > 980 || sy < -40 || sy > 580) continue;
       const n = Math.max(2, Math.round(sp.w / 14));
+      if (sp.ashBone) {
+        for (let i = 0; i < n; i++) {
+          const cell = sp.w / n;
+          const px = sx + (i + 0.5) * cell;
+          const lean = ((i % 3) - 1) * 2.4;
+          const tipY = sy + (i % 2 ? 2 : 0);
+          const baseY = sy + sp.h;
+          const bone = ctx.createLinearGradient(px, tipY, px, baseY);
+          bone.addColorStop(0, '#e8e2cf');
+          bone.addColorStop(0.55, '#aca997');
+          bone.addColorStop(1, '#5a5960');
+          ctx.fillStyle = bone;
+          ctx.strokeStyle = 'rgba(36,39,50,0.72)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(px - Math.min(6, cell * 0.38), baseY);
+          ctx.quadraticCurveTo(px - 2 + lean, sy + sp.h * 0.42, px + lean, tipY);
+          ctx.quadraticCurveTo(px + 3 + lean, sy + sp.h * 0.46, px + Math.min(6, cell * 0.38), baseY);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = 'rgba(245,241,221,0.45)';
+          ctx.fillRect(px + lean - 0.7, tipY + 4, 1.4, Math.max(3, sp.h * 0.38));
+        }
+        ctx.fillStyle = '#34343d';
+        ctx.fillRect(sx - 2, sy + sp.h - 3, sp.w + 4, 5);
+        continue;
+      }
       for (let i = 0; i < n; i++) {
         const px = sx + (i + 0.5) * (sp.w / n);
         ctx.fillStyle = '#171019';
@@ -1060,6 +1122,7 @@ const World = {
         });
       }
     }
+    if (window.AshValley) AshValley.drawForegroundEffects(ctx, cam, frames);
   },
 
   drawDarkKatana(ctx, cam, frames) {
@@ -1245,53 +1308,15 @@ const World = {
   },
 
   drawGate(ctx, cam, frames) {
-    const g = this.gate;
-    const sx = g.x - cam.x, sy = g.y - cam.y;
-    if (sx < -160 || sx > 1100) return;
-    // laje que sobe
-    const rise = U.easeInOut(g.openT) * 240;
-    if (g.openT < 1) {
-      const slab = ctx.createLinearGradient(sx, sy - rise, sx, sy + g.h - rise);
-      slab.addColorStop(0, '#232c44');
-      slab.addColorStop(1, '#101828');
-      ctx.fillStyle = slab;
-      ctx.fillRect(sx, sy - rise, g.w, g.h);
-      // selo entalhado
-      ctx.strokeStyle = 'rgba(120,200,255,0.5)';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(sx + 8, sy - rise + 30, g.w - 16, g.h - 60);
-    }
-    // pilares
-    ctx.fillStyle = '#1a2338';
-    ctx.fillRect(sx - 26, sy - 40, 26, g.h + 300);
-    ctx.fillRect(sx + g.w, sy - 40, 26, g.h + 300);
-    ctx.fillRect(sx - 36, sy - 56, g.w + 72, 20);
-    // soquetes de essência no pilar
-    for (let i = 0; i < g.cost; i++) {
-      const ex = sx - 13, ey = sy + 30 + i * 46;
-      const filled = Game.essences > i;
-      ctx.save();
-      if (filled) {
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.shadowColor = '#ffd678'; ctx.shadowBlur = 10;
-        ctx.fillStyle = `rgba(255,220,140,${0.75 + 0.25 * Math.sin(frames * 0.1 + i)})`;
-      } else {
-        ctx.fillStyle = '#0a0f1c';
-        ctx.strokeStyle = 'rgba(140,170,220,0.4)';
-      }
-      ctx.beginPath();
-      ctx.moveTo(ex, ey - 8); ctx.lineTo(ex + 6, ey); ctx.lineTo(ex, ey + 8); ctx.lineTo(ex - 6, ey);
-      ctx.closePath();
-      filled ? ctx.fill() : (ctx.fill(), ctx.stroke());
-      ctx.restore();
-    }
+    // O portão selado foi removido
+    return;
   },
 
   drawPortal(ctx, cam, frames) {
     const p = this.portal;
     const sx = p.x - cam.x, sy = p.y - cam.y - 64;
     if (sx < -120 || sx > 1080) return;
-    const active = Game.bossDefeated;
+    const active = Game.essences >= 3;
     const col = active ? '255,224,150' : '110,130,180';
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
@@ -1388,57 +1413,6 @@ const World = {
     ctx.restore();
     if (Math.random() < 0.15) {
       Particles.spawn({ x: a.x + U.rand(-14, 14), y: a.y - 40 + U.rand(-10, 10), vy: -0.5, life: 50, size: 2, color: 'rgba(160,230,255,0.9)', type: 'wisp' });
-    }
-  },
-
-  drawWindAmulet(ctx, cam, frames) {
-    const a = this.windAmulet;
-    if (this.current !== 'floresta' || a.taken) return;
-    const sx = a.x - cam.x, sy = a.y - cam.y - 40 + Math.sin(frames * 0.05) * 6;
-    if (sx < -40 || sx > 1000) return;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    // 1. Brilho radial verde-menta
-    const pulse = 0.7 + 0.3 * Math.sin(frames * 0.07);
-    const g = ctx.createRadialGradient(sx, sy, 2, sx, sy, 40 * pulse);
-    g.addColorStop(0, 'rgba(162,232,201,0.55)');
-    g.addColorStop(1, 'rgba(162,232,201,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(sx, sy, 40 * pulse, 0, Math.PI * 2); ctx.fill();
-
-    // 2. Desenho do amuleto
-    ctx.fillStyle = '#10221a';
-    ctx.beginPath();
-    ctx.arc(sx, sy, 13, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Aro brilhante ao redor
-    ctx.strokeStyle = 'rgba(162,232,201,0.9)';
-    ctx.lineWidth = 2.4;
-    ctx.beginPath(); ctx.arc(sx, sy, 19 + Math.sin(frames * 0.08) * 2, 0, Math.PI * 2); ctx.stroke();
-
-    // Símbolo do vento brilhante interno (espiral simples)
-    ctx.strokeStyle = '#a2e8c9';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let theta = 0; theta < Math.PI * 3; theta += 0.1) {
-      const r = 1.2 * theta;
-      const tx = sx + Math.cos(theta + frames * 0.03) * r;
-      const ty = sy + Math.sin(theta + frames * 0.03) * r;
-      if (theta === 0) ctx.moveTo(tx, ty);
-      else ctx.lineTo(tx, ty);
-    }
-    ctx.stroke();
-
-    ctx.restore();
-    
-    // micropartículas
-    if (Math.random() < 0.15) {
-      Particles.spawn({
-        x: a.x + U.rand(-14, 14), y: a.y - 40 + U.rand(-10, 10),
-        vy: -0.5, life: 50, size: 2,
-        color: 'rgba(162,232,201,0.9)', type: 'wisp'
-      });
     }
   },
 

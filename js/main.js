@@ -50,7 +50,10 @@ const Game = {
   prevState: null,
   essences: 0, kills: 0, purified: 0, absorbed: 0,
   amulets: { sui: false, ka: false, wind: false }, equipped: null, // um amuleto por vez, equipado fora de combate
-  hasDarkKatana: false, bossDefeated: false, fireBossDefeated: false,
+  fireAmuletForm: 'base', // 'base' | 'ancestral'
+  ancientEssenceClaimed: false,
+  hasDarkKatana: false, bossDefeated: false, fireBossDefeated: false, windBossDefeated: false,
+  ancientGolemDefeated: false,
   wielded: 'light', // 'light' | 'dark' — qual katana está na mão
   checkpoint: { map: 'floresta', x: 200, y: 1200 },
   caveShown: false, lavaShown: false, ashShown: false,
@@ -60,6 +63,106 @@ const Game = {
   essenceLost: false, essence: null, hpPenalty: 0,
   wipe: null,
   portalHintCd: 0,
+  toriiHints: {},
+  developerMode: false,
+
+  shogunEssenceCount() {
+    return Number(this.bossDefeated) + Number(this.fireBossDefeated) + Number(this.windBossDefeated);
+  },
+
+  hasAllShogunEssences() {
+    return this.shogunEssenceCount() === 3;
+  },
+
+  toggleDeveloperMode() {
+    this.developerMode = !this.developerMode;
+    if (this.player) {
+      this.player.vx = 0;
+      this.player.vy = 0;
+      this.player.dashT = 0;
+      this.player.setMeditating(false);
+      if (this.developerMode) this.player.invuln = 0;
+    }
+    Sfx.confirm();
+    Hud.toast(
+      this.developerMode
+        ? 'Modo desenvolvedor ativado: voo e imunidade a inimigos.'
+        : 'Modo desenvolvedor desativado.',
+      this.developerMode ? '#9fffe0' : '#c8d0dc'
+    );
+  },
+
+  drawDeveloperBadge(ctx) {
+    if (!this.developerMode) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(4,20,24,0.90)';
+    ctx.fillRect(400, 12, 160, 40);
+    ctx.strokeStyle = 'rgba(125,255,218,0.75)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(400.5, 12.5, 159, 39);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#baffeb';
+    ctx.font = '700 11px "Segoe UI", sans-serif';
+    ctx.fillText('MODO DEV ATIVO', 480, 25);
+    ctx.fillStyle = '#7ed9c1';
+    ctx.font = '9px "Segoe UI", sans-serif';
+    ctx.fillText('VOO | INVULNERAVEL | F9', 480, 41);
+    ctx.restore();
+  },
+
+  pointerWorldPosition() {
+    if (!Input.pointer.just) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+
+    const pixelX = (Input.pointer.x - rect.left) * (canvas.width / rect.width);
+    const pixelY = (Input.pointer.y - rect.top) * (canvas.height / rect.height);
+    const screenX = (pixelX - viewOffX) / viewScale;
+    const screenY = (pixelY - viewOffY) / viewScale;
+    if (screenX < 0 || screenX > VW || screenY < 0 || screenY > VH) return null;
+
+    const zoom = this.cam.zoom || 1;
+    const sceneX = (screenX - VW / 2 - this.cam.offsetX) / zoom + VW / 2;
+    const sceneY = (screenY - VH / 2 - this.cam.offsetY) / zoom + VH / 2;
+    return { x: sceneX + this.cam.x, y: sceneY + this.cam.y };
+  },
+
+  updateToriiInteraction(p) {
+    const click = this.pointerWorldPosition();
+    for (const c of World.checkpoints) {
+      const near = Math.abs(p.x - c.x) < 42 && Math.abs(p.y - c.y) < 70;
+      if (!near) continue;
+      if (!p.onGround) continue;
+
+      const key = `${World.current}:${c.x}:${c.y}`;
+      const isCurrent = this.checkpoint.map === World.current
+        && this.checkpoint.x === c.x && this.checkpoint.y === c.y;
+      if (!isCurrent) {
+        this.checkpoint = { map: World.current, x: c.x, y: c.y };
+        Sfx.checkpoint();
+      }
+      if (!this.toriiHints[key]) {
+        this.toriiHints[key] = true;
+        Hud.toast('O torii guarda sua luz — ↑ ou clique para meditar.');
+      }
+
+      const clickedTorii = click
+        && Math.abs(click.x - c.x) < 58
+        && click.y > c.y - 110 && click.y < c.y + 18;
+      if (!Input.pressed('up') && !clickedTorii) break;
+
+      p.setMeditating(!p.meditating);
+      if (p.meditating) {
+        Sfx.tone({ f: 392, f2: 523, dur: 0.42, type: 'sine', vol: 0.07 });
+        Hud.toast('瞑 Meditação iniciada — mova-se para despertar.', '#d9f5d8');
+      } else {
+        Sfx.tone({ f: 523, f2: 392, dur: 0.22, type: 'sine', vol: 0.05 });
+        Hud.toast('A meditação foi encerrada.', '#c8d0dc');
+      }
+      break;
+    }
+  },
 
   cycleAmulet() {
     const owned = ['sui', 'ka', 'wind'].filter(a => this.amulets[a]);
@@ -76,8 +179,11 @@ const Game = {
       label = '水 Sui equipado — as marés respondem à lâmina';
       color = '#a8dcff';
     } else if (ka) {
-      label = '火 Ka equipado — as chamas respondem à lâmina';
-      color = '#ffc08a';
+      const ancestral = this.fireAmuletForm === 'ancestral';
+      label = ancestral
+        ? '蒼 Amuleto de Fogo Ancestral equipado — a chama azul marca seus golpes'
+        : '火 Ka equipado — as chamas respondem à lâmina';
+      color = ancestral ? '#82ddff' : '#ffc08a';
     } else {
       label = '風 Fū equipado — as correntes de vento respondem à lâmina';
       color = '#a2e8c9';
@@ -88,7 +194,13 @@ const Game = {
       x: p.x + U.rand(-10, 10), y: p.y - 20 + U.rand(-12, 12),
       vx: U.rand(-1, 1), vy: U.rand(-1.4, 0),
       life: 30, size: 2.4,
-      color: sui ? 'rgba(140,220,255,0.9)' : (ka ? 'rgba(255,160,80,0.9)' : 'rgba(162,232,201,0.9)'),
+      color: sui
+        ? 'rgba(140,220,255,0.9)'
+        : (ka
+          ? (this.fireAmuletForm === 'ancestral'
+            ? 'rgba(110,220,255,0.94)'
+            : 'rgba(255,160,80,0.9)')
+          : 'rgba(162,232,201,0.9)'),
       type: 'wisp'
     }));
   },
@@ -98,6 +210,7 @@ const Game = {
 
   // ── diálogo da serpente ──
   openSerpentDialog() {
+    if (World.current !== 'floresta') return;
     Sfx.absorb();
     this.dialog = {
       t: 0, sel: 1,
@@ -134,53 +247,162 @@ const Game = {
     };
   },
 
+  openAncientEssenceDialog() {
+    if (!window.AshValley || !AshValley.ancientEssenceAvailable(this) || this.dialog) return false;
+
+    if (!this.amulets.ka) {
+      Sfx.deny();
+      this.dialog = {
+        t: 0, sel: 0,
+        typeSpeed: 3,
+        speaker: 'Essência Ancestral',
+        accent: '#82ddff',
+        lines: [
+          'Você precisa pegar o Amuleto de Fogo antes',
+          'para aguentar a Essência Ancestral.'
+        ],
+        options: ['Entendi'],
+        optionAccents: ['#82ddff'],
+        onChoose: () => {
+          this.dialog = null;
+          Sfx.deny();
+        }
+      };
+      return true;
+    }
+
+    Sfx.tone({ f: 220, f2: 440, dur: 0.38, type: 'sine', vol: 0.07 });
+    this.dialog = {
+      t: 0, sel: 0,
+      minConfirmT: 60,
+      typeSpeed: 8,
+      speaker: 'Transformar o Amuleto de Fogo?',
+      accent: '#82ddff',
+      lines: [
+        'Ao pegar a Essência Ancestral, o Amuleto de Fogo será',
+        'consumido e renascerá como Amuleto de Fogo Ancestral.',
+        'Você perderá permanentemente a Barragem de Fogo.',
+        'Benefício: 20% da magia de fogo inimiga vira cura.',
+        'Malefício: +20% de dano recebido de magia de Água.',
+        'Malefício: +15% de dano físico recebido.',
+        'Malefício: +15% no custo de todas as magias.',
+        'Ativação: Incinerar Ancestral marca golpes por 5 ações.',
+        'Tem certeza de que deseja continuar?'
+      ],
+      options: ['Agora não', 'Transformar Ka'],
+      optionAccents: ['#d6c8a7', '#82ddff'],
+      onChoose: (i) => {
+        this.dialog = null;
+        if (i !== 1) {
+          Sfx.deny();
+          Hud.toast('A Essência Ancestral continua aguardando no santuário.', '#9bcfff');
+          return;
+        }
+
+        // Revalida tudo antes da mutação: a transformação acontece inteira
+        // ou não acontece, e Ka continua sendo o amuleto equipado.
+        if (!AshValley.ancientEssenceAvailable(this) || !this.amulets.ka) {
+          Sfx.deny();
+          Hud.toast('A Essência Ancestral rejeitou a transformação.', '#9bcfff');
+          return;
+        }
+
+        this.amulets.ka = true;
+        this.equipped = 'ka';
+        this.fireAmuletForm = 'ancestral';
+        this.ancientEssenceClaimed = true;
+
+        const essence = AshValley.ANCIENT_ESSENCE;
+        const p = this.player;
+        Sfx.amulet();
+        this.cam.shake = Math.max(this.cam.shake, 9);
+        Hud.showBanner('蒼', 'Amuleto de Fogo Ancestral', 'Incinerar Ancestral despertou. Barragem de Fogo foi consumida.');
+        Hud.toast('Ka renasceu em chamas azuis.', '#82ddff');
+        Particles.burst(essence.x, essence.y - 28, 34, () => ({
+          x: essence.x + U.rand(-18, 18), y: essence.y - 28 + U.rand(-22, 16),
+          vx: U.rand(-2.4, 2.4), vy: U.rand(-3.1, -0.3),
+          life: 72, size: U.rand(2.2, 4.2), color: 'rgba(110,215,255,0.96)', type: 'wisp'
+        }));
+        Particles.burst(p.x, p.y - 24, 22, () => ({
+          x: p.x + U.rand(-14, 14), y: p.y - 24 + U.rand(-18, 18),
+          vx: U.rand(-1.8, 1.8), vy: U.rand(-2.6, 0.2),
+          life: 58, size: U.rand(2, 3.6), color: 'rgba(180,240,255,0.94)', type: 'wisp'
+        }));
+      }
+    };
+    return true;
+  },
+
+  updateAncientEssenceInteraction(p) {
+    if (!window.AshValley || !AshValley.ancientEssenceAvailable(this)) return false;
+    if (!AshValley.playerNearAncientEssence(p) || !Input.pressed('up')) return false;
+    p.setMeditating(false);
+    return this.openAncientEssenceDialog();
+  },
+
   updateDialog() {
     const d = this.dialog;
     d.t++;
-    if (Input.pressed('up') || Input.pressed('downKey') || Input.pressed('left') || Input.pressed('right')) {
-      d.sel = 1 - d.sel;
+    const options = Array.isArray(d.options) && d.options.length ? d.options : ['Continuar'];
+    d.sel = U.clamp(Number.isFinite(d.sel) ? d.sel : 0, 0, options.length - 1);
+    const previous = Input.pressed('up') || Input.pressed('left');
+    const next = Input.pressed('downKey') || Input.pressed('right');
+    if (options.length > 1 && (previous || next)) {
+      d.sel = (d.sel + (previous ? -1 : 1) + options.length) % options.length;
       Sfx.menuMove();
     }
-    if (Input.pressed('confirm') && d.t > 30) d.onChoose(d.sel);
+    if (Input.pressed('confirm') && d.t > (d.minConfirmT || 30)) d.onChoose(d.sel);
   },
 
   drawDialog() {
     const d = this.dialog;
     ctx.fillStyle = 'rgba(2,4,10,0.55)';
     ctx.fillRect(0, 0, 960, 540);
-    const bx = 130, by = 310, bw = 700, bh = 192;
+    const bx = 130, bw = 700;
+    const lineCount = Math.max(1, Array.isArray(d.lines) ? d.lines.length : 1);
+    const bh = Math.min(400, Math.max(192, 118 + lineCount * 25));
+    const by = 540 - bh - 38;
+    const accent = d.accent || '#c9a6ff';
     ctx.fillStyle = 'rgba(10,8,20,0.94)';
     ctx.fillRect(bx, by, bw, bh);
-    ctx.strokeStyle = 'rgba(170,110,255,0.55)';
+    ctx.strokeStyle = accent;
+    ctx.globalAlpha = 0.58;
     ctx.lineWidth = 1.5;
     ctx.strokeRect(bx, by, bw, bh);
-    ctx.fillStyle = '#c9a6ff';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = accent;
     ctx.font = '700 13px "Segoe UI", sans-serif';
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     ctx.fillText(d.speaker, bx + 18, by + 28);
     ctx.fillStyle = '#e4dcf2';
     ctx.font = '15px "Segoe UI", sans-serif';
-    let budget = Math.floor(d.t * 1.5);
+    let budget = Math.floor(d.t * (d.typeSpeed || 1.5));
     d.lines.forEach((ln, i) => {
       ctx.fillText(ln.slice(0, Math.max(0, budget)), bx + 18, by + 58 + i * 25);
       budget -= ln.length;
     });
-    d.options.forEach((op, i) => {
-      const ox = bx + bw - 310 + i * 155, oy = by + bh - 44;
+    const options = Array.isArray(d.options) && d.options.length ? d.options : ['Continuar'];
+    const buttonW = options.length === 1 ? 170 : 190;
+    const buttonGap = 14;
+    const totalButtonsW = options.length * buttonW + (options.length - 1) * buttonGap;
+    const optionStartX = bx + bw - 18 - totalButtonsW;
+    options.forEach((op, i) => {
+      const ox = optionStartX + i * (buttonW + buttonGap), oy = by + bh - 44;
       const seld = d.sel === i;
-      ctx.fillStyle = seld ? (i === 0 ? 'rgba(170,110,255,0.25)' : 'rgba(255,214,130,0.2)') : 'rgba(30,26,46,0.8)';
-      ctx.fillRect(ox, oy, 135, 30);
-      ctx.strokeStyle = seld ? (i === 0 ? '#b98fff' : '#ffe08a') : 'rgba(120,110,160,0.4)';
-      ctx.strokeRect(ox, oy, 135, 30);
+      const optionAccent = (d.optionAccents && d.optionAccents[i]) || (i === 0 ? '#b98fff' : '#ffe08a');
+      ctx.fillStyle = seld ? 'rgba(92,118,150,0.28)' : 'rgba(30,26,46,0.8)';
+      ctx.fillRect(ox, oy, buttonW, 30);
+      ctx.strokeStyle = seld ? optionAccent : 'rgba(120,110,160,0.4)';
+      ctx.strokeRect(ox, oy, buttonW, 30);
       ctx.fillStyle = seld ? '#ffffff' : '#a8a0c0';
       ctx.font = (seld ? '700 ' : '') + '14px "Segoe UI", sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(op, ox + 67, oy + 15);
+      ctx.fillText(op, ox + buttonW / 2, oy + 15);
     });
     ctx.fillStyle = 'rgba(150,140,180,0.7)';
     ctx.font = '11px "Segoe UI", sans-serif';
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText('← → escolher · ENTER confirmar', bx + 18, by + bh - 24);
+    ctx.fillText(options.length > 1 ? '← → escolher · ENTER confirmar' : 'ENTER continuar', bx + 18, by + bh - 24);
   },
 
   swapKatana(silent) {
@@ -206,6 +428,10 @@ const Game = {
     Input.init();
     World.init();
     Enemies.init();
+    // O Reino do Vento se registra durante World.init, antes de Enemies.init
+    // limpar a lista. Reinstalar aqui repoe seus inimigos de forma idempotente.
+    if (window.WindKingdom) WindKingdom.install();
+    if (window.AshValley) AshValley.spawnEnemies(Enemies.list);
     World.setDecorActors(Enemies.list);
     Lighting.init(); // Inicializa o buffer de iluminação
     this.player = new Player(World.checkpoints[0].x, World.checkpoints[0].y);
@@ -243,6 +469,7 @@ const Game = {
   // ── entrada e saída de batalha ──
   startBattle(fieldEnemy, advantage) {
     if (this.wipe) return;
+    this.player.setMeditating(false);
     Sfx.noise({ dur: 0.4, vol: 0.3, fc: 2000, fc2: 300 });
     this.cam.shake = 6;
     this.startWipe(() => {
@@ -274,7 +501,14 @@ const Game = {
           SpiritOfLight.onDeath(f.map || World.current, f.x, f.y);
         }
         this.respawn(true);
-        if (f.isBoss) Hud.toast('O Shōgun aguarda, imóvel como o lago.', '#a8c4e8');
+        if (f.isBoss) {
+          Hud.toast(
+            f.archetype === 'ancientGolem'
+              ? 'O Golem continua preso no santuário, alimentando a chama ancestral.'
+              : 'O Shōgun aguarda, imóvel como o lago.',
+            f.archetype === 'ancientGolem' ? '#7ad8ff' : '#a8c4e8'
+          );
+        }
         Hud.toast('Parte da sua luz ficou para trás — um Espírito nasceu.', '#ffe4a0');
       } else if (outcome === 'recovered') {
         Hud.toast('Sua essência retornou. Você está inteiro novamente.', '#ffe9b0');
@@ -291,6 +525,7 @@ const Game = {
   // ── Recuperar Espírito: a arena espiritual se forma ──
   startSpiritBattle() {
     if (this.wipe || this.state !== 'explore') return;
+    this.player.setMeditating(false);
     const e = this.essence;
     Sfx.tone({ f: 523, dur: 0.7, type: 'sine', vol: 0.12 });
     Sfx.tone({ f: 784, dur: 0.9, type: 'sine', vol: 0.1, delay: 0.25 });
@@ -313,7 +548,8 @@ const Game = {
     const p = this.player;
     p.x = c.x; p.y = c.y;
     p.vx = 0; p.vy = 0; p.dashT = 0;
-    if (full) { p.hp = p.maxHp; p.mp = p.maxMp; }
+    p.setMeditating(false);
+    if (full) { p.hp = p.maxHp; p.mp = p.maxMp; p.sta = p.maxSta; }
     this.cam.x = U.clamp(p.x - 480, 0, World.width - VW);
     this.cam.y = U.clamp(p.y - 330, 0, World.height - VH);
   },
@@ -347,6 +583,8 @@ const Game = {
     }
     if (this.serpentCd > 0) this.serpentCd--;
     if (this.portalHintCd > 0) this.portalHintCd--;
+    this.updateToriiInteraction(p);
+    if (this.updateAncientEssenceInteraction(p)) { Hud.update(); return; }
     p.update();
 
     // golpe de katana inicia confronto com vantagem
@@ -383,13 +621,17 @@ const Game = {
       if (pk.taken) continue;
       if (Math.abs(p.x - pk.x) < 26 && Math.abs(p.y - 18 - pk.y) < 36) {
         if (pk.type === 'lotus') {
-          if (p.hp >= p.maxHp) continue;
-          p.hp = Math.min(p.maxHp, p.hp + 12);
-          Hud.toast('Lótus de luz — +12 PV');
+          const gain = 6; // metade dos antigos 12 PV
+          p.maxHp += gain;
+          p.hp = Math.min(p.maxHp, p.hp + gain);
+          Hud.toast('Estrela de vida — +6 PV máximos');
+        } else if (pk.type === 'crystal') {
+          const gain = 2.5; // metade dos antigos 5 PM
+          p.maxMp += gain;
+          p.mp = Math.min(p.maxMp, p.mp + gain);
+          Hud.toast('Essência de mana — +2,5 PM máximos', '#a8dcff');
         } else {
-          if (p.mp >= p.maxMp) continue;
-          p.mp = Math.min(p.maxMp, p.mp + 5);
-          Hud.toast('Cristal de maré — +5 PM', '#a8dcff');
+          continue;
         }
         pk.taken = true;
         Sfx.pickup();
@@ -403,31 +645,8 @@ const Game = {
       }
     }
 
-    // toriis de descanso
-    for (const c of World.checkpoints) {
-      const isCurrent = this.checkpoint.map === World.current
-        && this.checkpoint.x === c.x && this.checkpoint.y === c.y;
-      if (!isCurrent && Math.abs(p.x - c.x) < 42 && Math.abs(p.y - c.y) < 70) {
-        this.checkpoint = { map: World.current, x: c.x, y: c.y };
-        Sfx.checkpoint();
-        Hud.toast('O torii guarda sua luz.');
-      }
-    }
-
-    // portão selado
-    const g = World.gate;
-    if (!g.opening && g.openT < 1 && Math.abs(p.x - g.x) < 180) {
-      if (this.essences >= g.cost) {
-        g.opening = true;
-        Sfx.gate();
-        this.cam.shake = 9;
-        Hud.toast('As essências despertam o selo — o portão cede.');
-      } else if (Math.abs(p.x - g.x) < 90 && this.portalHintCd <= 0) {
-        this.portalHintCd = 240;
-        Hud.toast(`O selo exige ${g.cost} essências de luz. Você tem ${this.essences}.`, '#a8c4e8');
-      }
-    }
-    if (g.opening && g.openT < 1) g.openT = Math.min(1, g.openT + 1 / 80);
+    // portão selado removido
+    // A travessia é livre; o progresso agora é travado no Portal da Aurora.
 
     // portais entre reinos (↓ para atravessar)
     const fp = World.firePortal[World.current];
@@ -451,13 +670,12 @@ const Game = {
       });
       return;
     }
-    // portal do vento — EM BREVE
+    // portal do vento
     const wp = World.windPortal;
-    if (World.current === 'floresta' && this.portalHintCd <= 0
+    if (World.current === 'floresta' && !this.wipe
       && Math.abs(p.x - wp.x) < 46 && Math.abs(p.y - wp.y) < 85 && Input.pressed('downKey')) {
-      this.portalHintCd = 240;
-      Sfx.deny();
-      Hud.toast('風 O Reino do Vento dorme — EM BREVE.', '#cfe8d8');
+      WindKingdom.travel('vento');
+      return;
     }
 
     if (typeof LakeSerpentSystem !== 'undefined') {
@@ -508,41 +726,29 @@ const Game = {
       }));
     }
 
-    // Fū — amuleto do vento, ao lado do portal do vento
-    const wa = World.windAmulet;
-    if (World.current === 'floresta' && wa && !wa.taken && Math.abs(p.x - wa.x) < 36 && Math.abs(p.y - wa.y) < 90) {
-      wa.taken = true;
-      this.amulets.wind = true;
-      this.equipped = 'wind';
-      Sfx.amulet();
-      Hud.showBanner('風', 'Fū — Amuleto do Vento', 'Tornado, Salto Duplo e Dash Longo despertam. E alterna amuletos.');
-      Particles.burst(wa.x, wa.y - 40, 24, () => ({
-        x: wa.x + U.rand(-14, 14), y: wa.y - 40 + U.rand(-14, 14),
-        vx: U.rand(-2, 2), vy: U.rand(-2.5, 0),
-        life: 60, size: 3, color: 'rgba(162, 232, 201, 0.95)', type: 'wisp'
-      }));
-    }
+    // (O Fū — Amuleto do Vento — foi movido para o Reino do Vento: WindKingdom.afterPlayer)
 
-    // portal da aurora — só abre com Suijin derrotado
+    // portal da aurora — exige as 3 essências dos 3 chefes
     const po = World.portal;
     if (Math.abs(p.x - po.x) < 52 && p.onGround && Input.pressed('up')) {
-      if (this.bossDefeated) {
+      if (this.hasAllShogunEssences()) {
         this.startWipe(() => { this.state = 'ending'; });
       } else if (this.portalHintCd <= 0) {
         this.portalHintCd = 240;
         Sfx.deny();
-        Hud.toast('O portal dorme... algo nas profundezas ainda prende a floresta.', '#a8c4e8');
+        Hud.toast(`O portal dorme... Reúna as 3 essências de luz dos Shōguns (Água, Fogo e Vento) para ativá-lo. Você tem ${this.shogunEssenceCount()}/3.`, '#a8c4e8');
       }
     }
 
     // trocar de katana / amuleto (fora do combate)
-    if (Input.pressed('swap')) this.swapKatana(false);
-    if (Input.pressed('equip')) this.cycleAmulet();
+    if (!p.meditating && Input.pressed('swap')) this.swapKatana(false);
+    if (!p.meditating && Input.pressed('equip')) this.cycleAmulet();
 
     // a serpente do templo abandonado apenas CHAMA; o diálogo abre com ↑
     const dk = World.darkKatana;
     this.serpentNear = false;
-    if (!dk.taken && !this.serpentGone && this.serpentCd <= 0
+    if (World.current === 'floresta'
+        && !dk.taken && !this.serpentGone && this.serpentCd <= 0
         && Math.abs(p.x - dk.x) < 120 && Math.abs(p.y - dk.y) < 100) {
       this.serpentNear = true;
       if (Input.pressed('up')) this.openSerpentDialog();
@@ -629,11 +835,17 @@ const Game = {
     }
 
     // abismo (o subterrâneo tem fundo sólido; fora dele, cair é fatal)
-    const killY = p.x > 1620 ? World.height + 60 : 1560;
-    if (p.y > killY) {
+    if (World.current === 'floresta') {
+      const killY = p.x > 1620 ? World.height + 60 : 1560;
+      if (p.y > killY) {
+        p.hp = Math.max(0, p.hp - 5);
+        this.respawn(false);
+        Hud.toast('O abismo te devolve ao último torii.');
+      }
+    } else if (p.y > World.height + 60) {
       p.hp = Math.max(0, p.hp - 5);
       this.respawn(false);
-      Hud.toast('O abismo te devolve ao último torii.');
+      Hud.toast('As muralhas profundas te devolvem ao último torii.');
     }
 
     // banners de zona (superfície da floresta)
@@ -644,6 +856,7 @@ const Game = {
     }
 
     // ambiente vivo
+    if (window.AshValley) AshValley.update(this);
     this.ambient(p);
     Particles.update();
 
@@ -713,7 +926,7 @@ const Game = {
       });
     }
     // motas de brasa no Reino do Fogo
-    if (World.current === 'fogo' && Math.random() < 0.25) {
+    if (World.current === 'fogo' && (!window.AshValley || !AshValley.inValley(p.x, p.y)) && Math.random() < 0.25) {
       Particles.spawn({
         x: cx + U.rand(0, 960), y: cy + U.rand(280, 560),
         vx: U.rand(-0.25, 0.25), vy: U.rand(-0.9, -0.4),
@@ -738,8 +951,10 @@ const Game = {
       LakeSerpentSystem.drawBody(ctx, cam, this.frames);
     }
     Enemies.draw(ctx, cam, this.frames);
+    if (window.AshValley) AshValley.drawAncientEssenceBase(ctx, cam, this.frames, this);
     if (typeof SpiritOfLight !== 'undefined') SpiritOfLight.draw(ctx, cam, this.frames);
     this.player.draw(ctx, cam);
+    if (window.AshValley) AshValley.drawBurn(ctx, this.player, cam);
 
     // O volume aquático colore a cena; fontes de luz são compostas depois.
     World.drawWaterMedium(ctx, cam, this.frames);
@@ -748,6 +963,7 @@ const Game = {
     Lighting.draw(ctx, cam, this.frames);
     World.drawTerrainEmissive(ctx, cam, this.frames);
     World.drawBioluminescentEmissive(ctx, cam, this.frames);
+    if (window.AshValley) AshValley.drawAncientEssenceEmissive(ctx, cam, this.frames, this);
     if (typeof LakeSerpentSystem !== 'undefined') {
       LakeSerpentSystem.drawEmissive(ctx, cam, this.frames);
     }
@@ -793,7 +1009,7 @@ const Game = {
 
     // dica do portal
     const po = World.portal;
-    if (this.bossDefeated && World.current === 'floresta' && Math.abs(this.player.x - po.x) < 70) {
+    if (this.hasAllShogunEssences() && World.current === 'floresta' && Math.abs(this.player.x - po.x) < 70) {
       const sx = po.x - cam.x, sy = po.y - cam.y - 140 + Math.sin(this.frames * 0.1) * 4;
       ctx.fillStyle = 'rgba(255,235,180,0.9)';
       ctx.font = '700 20px "Segoe UI", sans-serif';
@@ -801,8 +1017,10 @@ const Game = {
       ctx.fillText('↑', sx, sy);
     }
 
+    if (window.AshValley) AshValley.drawAncientEssencePrompt(ctx, cam, this.frames, this);
+
     // o chamado da serpente (só o convite; o diálogo abre com ↑)
-    if (this.serpentNear && !this.dialog) {
+    if (World.current === 'floresta' && this.serpentNear && !this.dialog) {
       const dk = World.darkKatana;
       const sx = dk.x - 20 - cam.x, sy = dk.y - cam.y - 70 + Math.sin(this.frames * 0.06) * 3;
       ctx.save();
@@ -1386,6 +1604,8 @@ const Game = {
   update() {
     Sfx.updateMix(this.state, World.current, this.player);
 
+    if (Input.pressed('developer')) this.toggleDeveloperMode();
+
     if (this.state === 'paused') {
       this.updatePauseMenu();
       Input.endFrame();
@@ -1504,11 +1724,23 @@ const Game = {
       if (presetState === 'battle') {
         if (Battle.env === 'lava') activePreset = 'lava';
         else if (Battle.env === 'abyss') activePreset = 'abyss';
+        else if (Battle.env === 'wind') activePreset = 'wind';
       } else {
         if (World.current === 'fogo') activePreset = 'lava';
+        else if (World.current === 'vento') activePreset = 'wind';
         else if (this.player && (this.player.inWater || this.player.y > 1450)) activePreset = 'abyss';
       }
       VFXConfigs.applyPreset(activePreset);
+
+      // Reaproveita os sinais visuais da ventania sem interferir em fisica ou colisao.
+      if (activePreset === 'wind' && window.WindKingdom) {
+        const direction = WindKingdom.cycleDir;
+        const power = WindKingdom.windPower();
+        PostProcessor.Config.WindAtmosphere.strength = 0.18 + power * 0.82;
+        PostProcessor.Config.WindAtmosphere.direction = direction;
+        PostProcessor.Config.WindMotion.strength = 0.00035 + power * 0.00115;
+        PostProcessor.Config.WindMotion.direction = direction;
+      }
 
       const gl = PostProcessor.gl;
       // Limpa o viewport principal (com fundo preto para o letterboxing)
@@ -1544,6 +1776,9 @@ const Game = {
     uiCtx.setTransform(viewScale, 0, 0, viewScale, viewOffX, viewOffY);
     if (this.state === 'explore') Hud.draw(uiCtx);
     else if (this.state === 'battle') Battle.drawUI(uiCtx, this.frames);
+    if (this.state === 'explore' || this.state === 'battle' || this.state === 'paused') {
+      this.drawDeveloperBadge(uiCtx);
+    }
   }
 };
 

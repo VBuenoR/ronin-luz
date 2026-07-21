@@ -36,6 +36,11 @@ const PostProcessor = {
       impactCenter: [0.5, 0.5], impactDirection: [1, 0],
       impactRadius: 0.16, impactStrength: 0, impactProgress: 1
     },
+    WindAtmosphere: {
+      active: false, strength: 0, direction: 1,
+      cloudColor: [0.84, 0.9, 0.95], cloudOpacity: 0.08
+    },
+    WindMotion: { active: false, strength: 0, direction: 1 },
     ChromaticAberration: { active: true, offsetX: 0.0012, offsetY: 0.0 },
     ColorGrading: { active: true, brightness: 1.05, contrast: 1.05, saturation: 1.05, tint: [1.0, 1.0, 1.0] },
     FilmGrain: { active: true, amount: 0.035 },
@@ -46,6 +51,8 @@ const PostProcessor = {
   // Ordem de execução padrão dos passes
   passesOrder: [
     'HeatDistortion',
+    'WindAtmosphere',
+    'WindMotion',
     'Bloom',
     'ChromaticAberration',
     'Fog',
@@ -220,6 +227,8 @@ const PostProcessor = {
     this.programs.blur = linkProgram(vs, S.Blur);
     this.programs.bloomComposite = linkProgram(vs, S.BloomComposite);
     this.programs.heatDistortion = linkProgram(vs, S.HeatDistortion);
+    this.programs.windAtmosphere = linkProgram(vs, S.WindAtmosphere);
+    this.programs.windMotion = linkProgram(vs, S.WindMotion);
     this.programs.chromaticAberration = linkProgram(vs, S.ChromaticAberration);
     this.programs.colorGrading = linkProgram(vs, S.ColorGrading);
     this.programs.filmGrain = linkProgram(vs, S.FilmGrain);
@@ -383,6 +392,22 @@ const PostProcessor = {
       gl.uniform1f(gl.getUniformLocation(prog, 'u_impactRadius'), cfg.impactRadius);
       gl.uniform1f(gl.getUniformLocation(prog, 'u_impactStrength'), cfg.impactStrength);
       gl.uniform1f(gl.getUniformLocation(prog, 'u_impactProgress'), cfg.impactProgress);
+
+    } else if (name === 'WindAtmosphere') {
+      prog = this.programs.windAtmosphere;
+      gl.useProgram(prog);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_time'), frames * 0.01);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_strength'), cfg.strength);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_direction'), cfg.direction);
+      gl.uniform3fv(gl.getUniformLocation(prog, 'u_cloudColor'), cfg.cloudColor);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_cloudOpacity'), cfg.cloudOpacity);
+
+    } else if (name === 'WindMotion') {
+      prog = this.programs.windMotion;
+      gl.useProgram(prog);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_time'), frames * 0.01);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_strength'), cfg.strength);
+      gl.uniform1f(gl.getUniformLocation(prog, 'u_direction'), cfg.direction);
 
     } else if (name === 'ChromaticAberration') {
       prog = this.programs.chromaticAberration;

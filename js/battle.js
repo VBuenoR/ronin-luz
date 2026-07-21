@@ -7,6 +7,10 @@ const Battle = {
   menu: { open: false, idx: 0, sub: false, subIdx: 0 },
   playerDef: false, sta: 10,
   playerCast: null,
+  playerBurn: null,
+  ancestralMark: null,
+  enemyProjectile: null,
+  ancestralBlast: null,
   floaters: [], shake: 0, shakeX: 0, shakeY: 0, wave: null,
   menuSparks: [], menuFocusT: 0, menuDenyT: 0,
   menuCursorY: null, menuCursorTarget: null,
@@ -17,7 +21,13 @@ const Battle = {
   heatCanvas: null,
   PX: 270, PY: 408, EX: 688, EY: 408,
 
-  eScale() { return this.E.isBoss ? 3.4 : 1.75 + Math.min(this.E.tier, 6) * 0.15; },
+  eScale() {
+    if (this.E.archetype === 'ancientGolem') return 2.35;
+    if (this.E.archetype === 'ashSkeleton') return 2.15;
+    if (this.E.tier === 8) return 1.85;
+    if (this.E.tier === 12) return 2.15;
+    return this.E.isBoss ? 3.4 : 1.75 + Math.min(this.E.tier, 6) * 0.15;
+  },
 
   spiritGlow() { return this.spiritCalm || 0; },
 
@@ -38,19 +48,29 @@ const Battle = {
     this.sta = this.P.maxSta;
     this.playerDef = false; this.playerBarrier = null; this.playerHoly = false;
     this.playerCast = null;
+    this.playerBurn = null;
+    this.ancestralMark = null;
+    this.enemyProjectile = null;
+    this.ancestralBlast = null;
     this.over = false; this.purifyHinted = false;
     this.menu = { open: false, idx: 0, sub: false, subIdx: 0 };
     this.anim = { p: 'idle', e: 'idle', px: 0, ex: 0, pFlash: 0, eArm: 0 };
     this.msg = ''; this.msgT = 0; this.shake = 0; this.shakeX = 0; this.shakeY = 0;
     this.spiritCalm = 0;
     this.env = fieldEnemy.spirit ? 'spirit'
-      : (cfg.element === 'fogo') ? 'lava'
+      : fieldEnemy.map === 'vento' ? 'wind'
+      : fieldEnemy.ashValley ? 'abyss'
+      : (cfg && cfg.element === 'fogo') ? 'lava'
       : fieldEnemy.swim ? 'abyss'
       : fieldEnemy.y < 1100 ? 'forest'
       : fieldEnemy.x > 6410 ? 'boss'
       : (fieldEnemy.x > 5050 ? 'lake' : 'forest');
     this.mistT = 0;
     this.darkForceHits = 0;
+    this.playerParaT = 0;
+    this.playerTrapped = 0;
+    this.lightningFlash = 0;
+    this.windBlastDebuff = false;
     Particles.clear();
 
     // ── Recuperar Espírito: confronto espiritual (0 de dano, alta esquiva) ──
@@ -61,6 +81,7 @@ const Battle = {
         hp: fieldEnemy.spiritHp, maxHp: fieldEnemy.spiritHp,
         soco: 0, mare: 0, ult: 0, xp: 0,
         element: 'luz', fly: false, hits: 1, mist: false,
+        ancestralMarkImmune: true,
         defending: false, fatigued: false, script: [], flash: 0, hitT: 0,
         aura: 0, dissolve: 0, et: U.rand(0, 100)
       };
@@ -77,20 +98,52 @@ const Battle = {
     const scaledHp = Math.round(cfg.hp * scale);
     const scaledSoco = Math.round(cfg.soco * scaleDmg);
     const scaledMare = Math.round(cfg.mare * scaleDmg);
-    const scaledUlt = Math.round((fieldEnemy.tier === 10 ? 31 : (fieldEnemy.tier === 9 ? 30 : 26)) * scaleDmg);
+    const baseUlt = fieldEnemy.tier === 13 ? 34
+      : fieldEnemy.tier === 10 ? 31
+      : fieldEnemy.tier === 9 ? 30
+      : 26;
+    const scaledUlt = Math.round(baseUlt * scaleDmg);
     const scaledXp = Math.round(cfg.xp * scale);
+    const scaledVulcano = Math.round((cfg.vulcanoDamage || cfg.mare || 20) * scaleDmg);
+    const scaledRibBurn = Math.max(1, Math.round((cfg.ribBurnDamage || 3) * scaleDmg));
+    const scaledVulcanoBurn = Math.max(1, Math.round((cfg.vulcanoBurnDamage || 4) * scaleDmg));
 
     this.E = {
       name: cfg.name, short: cfg.short, kanji: cfg.kanji, tier: fieldEnemy.tier,
       isBoss: !!cfg.boss, hp: scaledHp, maxHp: scaledHp,
       soco: scaledSoco, mare: scaledMare, ult: scaledUlt, xp: scaledXp,
       element: cfg.element || 'agua', fly: !!cfg.fly, hits: cfg.hits || 1, mist: !!cfg.mist,
+      archetype: cfg.archetype || fieldEnemy.archetype || null,
+      lightKind: cfg.lightKind || fieldEnemy.lightKind || null,
+      miniBoss: !!(cfg.miniBoss || fieldEnemy.miniBoss),
+      fireAbsorb: !!cfg.fireAbsorb,
+      fireAbsorbRatio: Number.isFinite(cfg.fireAbsorbRatio) ? cfg.fireAbsorbRatio : 0.5,
+      extraHpCap: Number.isFinite(cfg.extraHpCap) ? cfg.extraHpCap : 0.5,
+      guardReduction: Number.isFinite(cfg.guardReduction) ? cfg.guardReduction : 0.5,
+      ribBurnChance: Number.isFinite(cfg.ribBurnChance) ? cfg.ribBurnChance : 0.35,
+      ribBurnDamage: scaledRibBurn,
+      vulcanoDamage: scaledVulcano,
+      vulcanoBurnDamage: scaledVulcanoBurn,
+      cocoonHealPct: Number.isFinite(cfg.cocoonHealPct) ? cfg.cocoonHealPct : 0.10,
+      ancestralMarkImmune: ['ashSkeleton', 'ancientGolem'].includes(cfg.archetype || fieldEnemy.archetype),
+      vulcanoCharged: false, cocoonTurns: 0, cocoonUsed: false,
+      storm: !!cfg.storm, stormPhase: false, evadePhysical: false,
       defending: false, fatigued: false, script: [], flash: 0, hitT: 0,
       aura: 0, dissolve: 0, et: U.rand(0, 100)
     };
     this.initAtmosphere();
 
-    if (this.E.isBoss) {
+    if (this.E.archetype === 'ancientGolem') {
+      this.push({
+        dur: 76,
+        msg: 'As pedras do santuário se fecham — o Golem da Chama Ancestral rompe o próprio cárcere!'
+      });
+    } else if (this.E.archetype === 'ashSkeleton') {
+      this.push({
+        dur: 54,
+        msg: 'Um Esqueleto das Chamas Azuis se contrai e salta das sombras!'
+      });
+    } else if (this.E.isBoss) {
       this.push({
         dur: 70,
         msg: this.E.element === 'fogo'
@@ -167,6 +220,14 @@ const Battle = {
     const claimable = this.E.hp > 0 && this.E.hp <= this.E.maxHp * this.claimThreshold();
     this.E.aura = U.lerp(this.E.aura, claimable && !this.over ? 1 : 0, 0.08);
     if (this.wave) { this.wave.t++; if (this.wave.t > this.wave.dur) this.wave = null; }
+    if (this.enemyProjectile) {
+      this.enemyProjectile.t++;
+      if (this.enemyProjectile.t > this.enemyProjectile.dur + 3) this.enemyProjectile = null;
+    }
+    if (this.ancestralBlast) {
+      this.ancestralBlast.t++;
+      if (this.ancestralBlast.t > this.ancestralBlast.dur) this.ancestralBlast = null;
+    }
     for (let i = this.floaters.length - 1; i >= 0; i--) {
       const f = this.floaters[i];
       f.t++; f.y -= 0.8;
@@ -204,6 +265,15 @@ const Battle = {
   // ── menu ──
   mainOptions() {
     const P = this.P;
+    // Se estiver preso em Prisão de Vento, o menu fica limitado
+    if (this.playerTrapped > 0) {
+      return [
+        { id: 'escape', label: '牢  Escapar', ok: true,
+          desc: `Tente romper as correntes de vento. 60% de chance (+20% com EST cheia: ${this.sta === P.maxSta ? '80%' : '60%'}).` },
+        { id: 'mag', label: '術  Magia', ok: true,
+          desc: 'As artes da luz' + (Game.equipped ? ' e dos elementos.' : '.') }
+      ];
+    }
     // Espírito pacificado: só resta reunir as essências
     if (this.E.spirit && this.E.pacified) {
       return [
@@ -215,30 +285,35 @@ const Battle = {
     }
     const isDark = Game.wielded === 'dark';
     const label = isDark ? '斬  Corte das Trevas' : '斬  Corte de Luz';
-    const critRate = this.darkForceHits > 0 ? '100%' : '50%';
+    const hasPara = this.playerParaT > 0;
+    const critRate = hasPara ? '0%' : (this.darkForceHits > 0 ? '100%' : '50%');
+    const atkCost = hasPara ? 4 : 2;
     if (this.E.spirit) {
       return [
-        { id: 'atk', label: label, ok: this.sta >= 2,
-          desc: `Toque o reflexo: ${P.atk} de dano. Ele se esquiva com frequência. Custa 2 EST.`,
+        { id: 'atk', label: label, ok: this.sta >= atkCost,
+          desc: `Toque o reflexo: ${P.atk} de dano. Ele se esquiva com frequência. Custa ${atkCost} EST.`,
           why: 'Sem fôlego — defenda para recuperar estamina.' },
         { id: 'def', label: '守  Defender', ok: true,
           desc: 'Recupera 2 EST e 3 PM. O Espírito não busca te ferir.' },
-        { id: 'run', label: '逃  Recuar', ok: true,
-          desc: 'Afaste-se do confronto. A essência permanece.' }
+        { id: 'run', label: '逃  Recuar', ok: !hasPara,
+          desc: 'Afaste-se do confronto. A essência permanece.',
+          why: 'Paralisado — suas pernas não obedecem para fugir!' }
       ];
     }
     return [
-      { id: 'atk', label: label, ok: this.sta >= 2,
+      { id: 'atk', label: label, ok: this.sta >= atkCost,
         desc: `${isDark ? 'Corte das trevas' : 'Corte de luz'}: ${P.atk} de dano, ${critRate} de crítico (${P.atk * 2}).`
-          + (isDark ? ` Crítico suga +${this.darkCritHeal()} PV.` : '') + ' Custa 2 EST.',
+          + (isDark ? ` Crítico suga +${this.darkCritHeal()} PV.` : '') + ` Custa ${atkCost} EST.`,
         why: 'Sem fôlego — defenda para recuperar estamina.' },
       { id: 'def', label: '守  Defender', ok: true,
-        desc: 'Reduz o próximo dano pela metade. Recupera 2 EST e 3 PM — defenda para carregar suas magias.' },
+        desc: hasPara
+          ? 'Postura defensiva sob paralisia: reduz o próximo dano em 25%. Recupera 2 EST e 3 PM.'
+          : 'Reduz o próximo dano pela metade. Recupera 2 EST e 3 PM — defenda para carregar suas magias.' },
       { id: 'mag', label: '術  Magia', ok: true,
         desc: 'As artes da luz' + (Game.equipped ? ' e dos elementos.' : '.') },
-      { id: 'run', label: '逃  Fugir', ok: !this.E.isBoss,
+      { id: 'run', label: '逃  Fugir', ok: !this.E.isBoss && !hasPara,
         desc: '65% de chance de escapar do confronto.',
-        why: 'As marés cercam a arena — não há fuga.' }
+        why: hasPara ? 'Paralisado — suas pernas não obedecem para fugir!' : 'As marés cercam a arena — não há fuga.' }
     ];
   },
 
@@ -246,6 +321,27 @@ const Battle = {
   mAtk() {
     let base = Game.wielded === 'dark' ? 3 : 0;
     return base + Game.absorbed * 4;
+  },
+
+  ancestralAmuletActive() {
+    return Game.fireAmuletForm === 'ancestral' && Game.equipped === 'ka';
+  },
+
+  // O malefício do amuleto ancestral afeta todas as artes, não apenas fogo.
+  // Menu e execução passam obrigatoriamente por estes helpers para que o custo
+  // exibido nunca divirja do PM efetivamente consumido.
+  magicCost(base) {
+    return this.ancestralAmuletActive()
+      ? Math.max(base + 1, Math.round(base * 1.15))
+      : base;
+  },
+
+  canPayMagic(base) { return this.P.mp >= this.magicCost(base); },
+
+  spendMagic(base) {
+    const cost = this.magicCost(base);
+    this.P.mp = Math.max(0, this.P.mp - cost);
+    return cost;
   },
 
   // cor da aura de reivindicação: segue a katana empunhada
@@ -256,49 +352,71 @@ const Battle = {
   magicOptions() {
     const P = this.P;
     const light = Game.wielded === 'light';
+    const ancestral = this.ancestralAmuletActive();
+    const cocoonLocked = this.E.archetype === 'ancientGolem' && this.E.cocoonTurns > 0;
     const lh = this.lightHeal();
     const cura = lh > 0 ? ` A luz cura +${lh} ao conjurar.` : '';
+    const c4 = this.magicCost(4), c5 = this.magicCost(5);
+    const c6 = this.magicCost(6), c7 = this.magicCost(7);
     const opts = [
-      { id: 'dluz', label: '盾  Defesa da Luz', ok: P.mp >= 6 && light && !Game.essenceLost,
-        desc: `Escudo sagrado: bloqueia 75% do próximo dano e cura ${4 + Game.purified} PV. Custa 6 PM.`,
+      { id: 'dluz', label: '盾  Defesa da Luz', ok: P.mp >= c6 && light && !Game.essenceLost,
+        desc: `Escudo sagrado: bloqueia 75% do próximo dano e cura ${4 + Game.purified} PV. Custa ${c6} PM.`,
         why: Game.essenceLost ? 'Sua essência está perdida — recupere-a para reaver este poder.'
-          : !light ? 'A luz não responde à lâmina negra — Q para trocar.' : 'PM insuficiente (precisa de 6).' },
-      { id: 'pur', label: '浄  Purificar', ok: P.mp >= 7 && light,
-        desc: `Vida ≤${this.E.isBoss ? '15% (chefe)' : '20%'}: purificação garantida (+3 PV máx). Abaixo de 50%: chance de 5%. Custa 7 PM.`,
-        why: !light ? 'A Katana de Luz dorme na bainha — Q para trocar.' : 'PM insuficiente (precisa de 7).' }
+          : !light ? 'A luz não responde à lâmina negra — Q para trocar.' : `PM insuficiente (precisa de ${c6}).` },
+      { id: 'pur', label: '浄  Purificar', ok: P.mp >= c7 && light && !cocoonLocked,
+        desc: `Vida ≤${this.E.isBoss ? '15% (chefe)' : '20%'}: purificação garantida (+3 PV máx). Abaixo de 50%: chance de 5%. Custa ${c7} PM.`,
+        why: cocoonLocked ? 'O casulo bloqueia a reivindicação — use Pulso de Água.'
+          : !light ? 'A Katana de Luz dorme na bainha — Q para trocar.' : `PM insuficiente (precisa de ${c7}).` }
     ];
     if (Game.hasDarkKatana) {
-      opts.push({ id: 'abs', label: '闇  Absorver', ok: P.mp >= 7 && !light,
-        desc: `Devora o espírito: vida ≤${this.E.isBoss ? '15% (chefe)' : '20%'} garantido (+4 dano mágico). Abaixo de 50%: 5%. Custa 7 PM.`,
-        why: light ? 'Empunhe a Katana da Escuridão — Q para trocar.' : 'PM insuficiente (precisa de 7).' });
-      opts.push({ id: 'ftrevas', label: '暗  Força das Trevas', ok: P.mp >= 4 && !light,
-        desc: `Poder sombrio: crítico garantido nos próximos 2 ATAQUES físicos. Custa 4 PM.`,
-        why: light ? 'Empunhe a Katana da Escuridão — Q para trocar.' : 'PM insuficiente (precisa de 4).' });
+      opts.push({ id: 'abs', label: '闇  Absorver', ok: P.mp >= c7 && !light && !cocoonLocked,
+        desc: `Devora o espírito: vida ≤${this.E.isBoss ? '15% (chefe)' : '20%'} garantido (+4 dano mágico). Abaixo de 50%: 5%. Custa ${c7} PM.`,
+        why: cocoonLocked ? 'O casulo bloqueia a reivindicação — use Pulso de Água.'
+          : light ? 'Empunhe a Katana da Escuridão — Q para trocar.' : `PM insuficiente (precisa de ${c7}).` });
+      opts.push({ id: 'ftrevas', label: '暗  Força das Trevas', ok: P.mp >= c4 && !light,
+        desc: `Poder sombrio: crítico garantido nos próximos 2 ATAQUES físicos. Custa ${c4} PM.`,
+        why: light ? 'Empunhe a Katana da Escuridão — Q para trocar.' : `PM insuficiente (precisa de ${c4}).` });
       if (Game.absorbed >= 1) {
-        opts.push({ id: 'bolt', label: '呪  Rajada Sombria', ok: P.mp >= 5 && !light,
-          desc: `Descarga do poder devorado: ${8 + this.mAtk()} de dano.${cura} Custa 5 PM.`,
-          why: light ? 'Empunhe a Katana da Escuridão — Q para trocar.' : 'PM insuficiente (precisa de 5).' });
+        opts.push({ id: 'bolt', label: '呪  Rajada Sombria', ok: P.mp >= c5 && !light,
+          desc: `Descarga do poder devorado: ${8 + this.mAtk()} de dano.${cura} Custa ${c5} PM.`,
+          why: light ? 'Empunhe a Katana da Escuridão — Q para trocar.' : `PM insuficiente (precisa de ${c5}).` });
       }
     }
     const md = 14 + this.mAtk(), pd = 16 + this.mAtk();
     if (Game.equipped === 'sui') {
-      opts.push({ id: 'bagua', label: '水  Barragem de Água', ok: P.mp >= 6,
-        desc: `${md} de dano e ergue uma barreira fluida (bloqueia metade do dano).${cura} Custa 6 PM.`,
-        why: 'PM insuficiente (precisa de 6).' });
-      opts.push({ id: 'pulso', label: '水  Pulso de Água', ok: P.mp >= 6,
-        desc: `Rajada à distância: ${pd} de dano. PERFURA a defesa de espíritos de fogo.${cura} Custa 6 PM.`,
-        why: 'PM insuficiente (precisa de 6).' });
+      opts.push({ id: 'bagua', label: '水  Barragem de Água', ok: P.mp >= c6,
+        desc: `${md} de dano e ergue uma barreira fluida (bloqueia metade do dano).${cura} Custa ${c6} PM.`,
+        why: `PM insuficiente (precisa de ${c6}).` });
+      opts.push({ id: 'pulso', label: '水  Pulso de Água', ok: P.mp >= c6,
+        desc: `Rajada à distância: ${pd} de dano. PERFURA a defesa de espíritos de fogo.${cura} Custa ${c6} PM.`,
+        why: `PM insuficiente (precisa de ${c6}).` });
     } else if (Game.equipped === 'ka') {
-      opts.push({ id: 'bfogo', label: '火  Barragem de Fogo', ok: P.mp >= 6,
-        desc: `${md} de dano e círculo de chamas (bloqueia metade — fraco contra água).${cura} Custa 6 PM.`,
-        why: 'PM insuficiente (precisa de 6).' });
-      opts.push({ id: 'incin', label: '火  Incinerar', ok: P.mp >= 6,
-        desc: `Chamas intensas: ${pd} de dano. PERFURA a defesa de espíritos de água.${cura} Custa 6 PM.`,
-        why: 'PM insuficiente (precisa de 6).' });
+      if (!ancestral) {
+        opts.push({ id: 'bfogo', label: '火  Barragem de Fogo', ok: P.mp >= c6,
+          desc: `${md} de dano e círculo de chamas (bloqueia metade — fraco contra água).${cura} Custa ${c6} PM.`,
+          why: `PM insuficiente (precisa de ${c6}).` });
+      }
+      opts.push({ id: 'incin', label: ancestral ? '藍  Incinerar' : '火  Incinerar', ok: P.mp >= c6,
+        desc: `Chamas intensas: ${pd} de dano. PERFURA a defesa de espíritos de água.${cura} Custa ${c6} PM.`,
+        why: `PM insuficiente (precisa de ${c6}).` });
+      if (ancestral) {
+        const immune = !!this.E.ancestralMarkImmune;
+        const alreadyActive = !!this.ancestralMark;
+        opts.push({
+          id: 'aincin', label: '蒼  Incinerar Ancestral',
+          ok: P.mp >= c6 && !immune && !alreadyActive,
+          desc: `Envolve o corpo por 5 ações. Golpes conectados guardam 40% do dano em uma Marca oculta que explode ignorando defesa. Custa ${c6} PM.`,
+          why: immune
+            ? 'A chama ancestral reconhece este espírito e se recusa a marcá-lo.'
+            : alreadyActive
+              ? 'Incinerar Ancestral já está ativo — conclua as 5 ações antes de conjurar novamente.'
+              : `PM insuficiente (precisa de ${c6}).`
+        });
+      }
     } else if (Game.equipped === 'wind') {
-      opts.push({ id: 'torn', label: '風  Tornado', ok: P.mp >= 6,
-        desc: `Turbilhão espiral: ${pd} de dano. PERFURA a defesa de espíritos de água.${cura} Custa 6 PM.`,
-        why: 'PM insuficiente (precisa de 6).' });
+      opts.push({ id: 'torn', label: '風  Tornado', ok: P.mp >= c6,
+        desc: `Turbilhão espiral: ${pd} de dano. PERFURA a defesa de espíritos de água.${cura} Custa ${c6} PM.`,
+        why: `PM insuficiente (precisa de ${c6}).` });
     } else if (Game.amulets.sui || Game.amulets.ka || Game.amulets.wind) {
       opts.push({ id: 'lock', label: '珠  (sem amuleto)', ok: false,
         desc: 'Nenhum amuleto equipado. Equipe com E — fora de combate.', why: '' });
@@ -347,6 +465,7 @@ const Battle = {
       Sfx.confirm();
       if (!m.sub) {
         if (opt.id === 'recuperar') this.actRecover();
+        else if (opt.id === 'escape') this.actEscape();
         else if (opt.id === 'atk') this.actAttack();
         else if (opt.id === 'def') this.actDefend();
         else if (opt.id === 'mag') { m.sub = true; m.subIdx = 0; this.menuFocus(true); }
@@ -361,6 +480,7 @@ const Battle = {
         else if (opt.id === 'pulso') this.actElemBolt('agua');
         else if (opt.id === 'bfogo') this.actBarrier('fogo');
         else if (opt.id === 'incin') this.actElemBolt('fogo');
+        else if (opt.id === 'aincin') this.actAncestralIncinerate();
         else if (opt.id === 'torn') this.actElemBolt('wind');
       }
     }
@@ -375,9 +495,14 @@ const Battle = {
     this.playerHoly = false;
     this.playerCast = null;
     if (this.mistT > 0) this.mistT--;
+    if (this.playerParaT > 0) this.playerParaT--;
+    if (this.playerTrapped > 0) this.playerTrapped--;
+    if (this.E) this.E.evadePhysical = false;
     // Força das Trevas dura os próximos 2 ATAQUES (consumida em actAttack), não turnos
     this.anim.p = 'idle';
-    this.anim.e = this.E.fatigued ? 'hurt' : (this.E.defending ? 'defend' : 'idle');
+    this.anim.e = this.E.cocoonTurns > 0
+      ? 'cocoon'
+      : (this.E.fatigued ? 'hurt' : (this.E.defending ? 'defend' : 'idle'));
     this.ensureScript();
     this.menu.open = true; this.menu.idx = 0; this.menu.sub = false;
     this.menuFocus(true);
@@ -400,11 +525,147 @@ const Battle = {
     return 0;
   },
 
-  // dano do jogador no inimigo: defesa reduz metade (salvo perfuração); fadiga amplifica 1.5×
+  // Dano do jogador no inimigo. A frágil Defesa de Ossos bloqueia só 25%;
+  // os demais guardas mantêm os 50% já existentes.
   finalDmg(dmg, pierce) {
-    if (this.E.defending && !pierce) dmg = Math.max(1, Math.floor(dmg / 2));
+    if (this.E.defending && !pierce) {
+      const reduction = Number.isFinite(this.E.guardReduction) ? this.E.guardReduction : 0.5;
+      dmg = Math.max(1, Math.floor(dmg * (1 - U.clamp(reduction, 0, 0.9))));
+    }
     if (this.E.fatigued) dmg = Math.round(dmg * 1.5);
     return dmg;
+  },
+
+  /**
+   * Chamas Ancestrais: magia do amuleto Ka causa zero dano. Metade do dano
+   * previsto vira cura; quando a barra já está cheia, torna-se PV extra, com
+   * limite de 50% para impedir alimentação infinita da passiva.
+   */
+  tryAbsorbEnemyFire(dmg) {
+    if (!this.E.fireAbsorb) return false;
+    const heal = Math.max(1, Math.floor(dmg * this.E.fireAbsorbRatio));
+    const cap = Math.ceil(this.E.maxHp * (1 + this.E.extraHpCap));
+    const before = this.E.hp;
+    // A primeira magia apenas fecha ferimentos. PV extra só começa em uma
+    // conjuração posterior, quando o esqueleto já estava com a barra cheia.
+    const absorbLimit = before >= this.E.maxHp ? cap : this.E.maxHp;
+    this.E.hp = Math.min(absorbLimit, this.E.hp + heal);
+    const gained = this.E.hp - before;
+    this.E.flash = 0.55;
+    this.E.hitT = 0;
+    this.msg = gained > 0
+      ? 'CHAMAS ANCESTRAIS! O fogo de Ka alimenta o esqueleto em vez de feri-lo.'
+      : 'CHAMAS ANCESTRAIS! A criatura já transborda vida extra.';
+    this.msgT = 0;
+    this.floater(this.EX, this.EY - 88, gained > 0 ? `+${gained}` : 'ABSORVIDO', '#8ee6ff', true);
+    EnemyVFX.charge(this.E, this.EX, this.EY);
+    Particles.burst(this.EX, this.EY - 48, 14, () => ({
+      x: this.EX + U.rand(-18, 18), y: this.EY - 48 + U.rand(-24, 18),
+      vx: U.rand(-0.7, 0.7), vy: U.rand(-1.8, -0.35), life: U.rand(30, 48),
+      size: U.rand(1.8, 3.2), color: 'rgba(105,210,255,0.94)', type: 'wisp'
+    }));
+    Sfx.tone({ f: 430, f2: 760, dur: 0.42, type: 'sine', vol: 0.12 });
+    return true;
+  },
+
+  applyPlayerBurn({ damage, turns = null, extinguishable = true, source = 'costela' }) {
+    // Vulcano sempre substitui uma queimadura comum. Uma chama impossível de
+    // apagar nunca é rebaixada por outra Costela Flamejante.
+    if (this.playerBurn && !this.playerBurn.extinguishable && extinguishable) return;
+    this.playerBurn = {
+      damage: Math.max(1, Math.round(damage)),
+      turns: Number.isFinite(turns) ? Math.max(1, Math.round(turns)) : null,
+      extinguishable: !!extinguishable,
+      source
+    };
+  },
+
+  clearAncestralMark() {
+    this.ancestralMark = null;
+  },
+
+  recordAncestralHit(damage) {
+    if (!this.ancestralMark || damage <= 0) return;
+    this.ancestralMark.stored += damage * 0.40;
+    this.ancestralMark.hits++;
+    // O total permanece deliberadamente oculto; o jogador conhece apenas
+    // quantas vezes alimentou a Marca e quantas ações ainda restam.
+    this.floater(this.EX, this.EY - 116, `MARCA ×${this.ancestralMark.hits}`, '#82ddff', false);
+    Particles.burst(this.EX, this.EY - 48, 8, () => ({
+      x: this.EX + U.rand(-14, 14), y: this.EY - 48 + U.rand(-20, 18),
+      vx: U.rand(-0.8, 0.8), vy: U.rand(-1.6, -0.2), life: U.rand(26, 42),
+      size: U.rand(1.5, 2.8), color: 'rgba(80,205,255,0.9)', type: 'wisp'
+    }));
+  },
+
+  actAncestralIncinerate() {
+    const cost = this.magicCost(6);
+    if (!this.ancestralAmuletActive() || this.ancestralMark || this.E.ancestralMarkImmune || this.P.mp < cost) return;
+    this.closeMenu();
+    this.spendMagic(6);
+    this.ancestralMark = { actionsLeft: 5, stored: 0, hits: 0 };
+    this.push({
+      dur: 52,
+      msg: '蒼 — Incinerar Ancestral! A chama azul envolve seu corpo e grava uma Marca oculta no inimigo.',
+      on: () => {
+        this.anim.p = 'cast';
+        this.playerCast = 'fire';
+        Game.cam.targetZoom = 1.2;
+        Game.cam.targetOffsetX = 18;
+        Sfx.fire();
+        Particles.burst(this.PX, this.PY - 40, 24, () => ({
+          x: this.PX + U.rand(-22, 22), y: this.PY - 28 + U.rand(-44, 18),
+          vx: U.rand(-1.1, 1.1), vy: U.rand(-2.2, -0.5), life: U.rand(34, 60),
+          size: U.rand(2, 3.8), color: 'rgba(80,205,255,0.94)', type: 'wisp'
+        }));
+      }
+    });
+    this.push({
+      dur: 18,
+      on: () => {
+        this.anim.p = 'idle';
+        Game.cam.targetZoom = 1.12;
+        Game.cam.targetOffsetX = 0;
+      }
+    });
+    // A ativação consome o turno, mas não uma das cinco ações do efeito.
+    this.push({ dur: 1, on: () => this.afterPlayer(false) });
+  },
+
+  detonateAncestralMark(mark) {
+    this.clearAncestralMark();
+    const damage = Math.max(0, Math.round(mark.stored));
+    this.push({
+      dur: 46,
+      msg: damage > 0
+        ? `MARCA ANCESTRAL! ${mark.hits} golpe${mark.hits === 1 ? '' : 's'} explode${mark.hits === 1 ? '' : 'm'} de dentro para fora: ${damage} de dano indefensável.`
+        : 'A Marca Ancestral se fecha sem alimento e se desfaz em fogo azul.',
+      on: () => {
+        this.ancestralBlast = { t: 0, dur: 34, target: 'enemy' };
+        if (damage > 0) {
+          this.E.hp = Math.max(0, this.E.hp - damage);
+          this.E.flash = 1;
+          this.E.hitT = 18;
+          this.shake = 12;
+          Game.cam.zoom = 1.42;
+          Game.freezeFrames = 8;
+          this.floater(this.EX, this.EY - 92, '-' + damage, '#9eeaff', true);
+          EnemyVFX.hit(this.E, this.EX, this.EY - 50, true);
+          Sfx.hit(true);
+        } else {
+          Sfx.tone({ f: 340, f2: 180, dur: 0.34, type: 'sine', vol: 0.08 });
+        }
+        Particles.burst(this.EX, this.EY - 48, damage > 0 ? 30 : 14, () => ({
+          x: this.EX + U.rand(-22, 22), y: this.EY - 48 + U.rand(-30, 24),
+          vx: U.rand(-3.8, 3.8), vy: U.rand(-3.4, 1.5), life: U.rand(30, 55),
+          size: U.rand(1.8, 4), color: 'rgba(90,215,255,0.96)', type: 'wisp'
+        }));
+      }
+    });
+    this.push({ dur: 18, on: () => { this.anim.e = this.E.hp > 0 ? 'idle' : 'hurt'; } });
+    // Reentra sem contar outra ação: vitória é resolvida antes de queimadura
+    // ou turno inimigo, inclusive quando a própria explosão finaliza o alvo.
+    this.push({ dur: 1, on: () => this.afterPlayer(false) });
   },
 
   closeMenu() { this.menu.open = false; },
@@ -412,15 +673,17 @@ const Battle = {
   // ── ações do jogador ──
   actAttack() {
     this.closeMenu();
-    this.sta -= 2;
+    const hasPara = this.playerParaT > 0;
+    const cost = hasPara ? 4 : 2;
+    this.sta -= cost;
     const forced = this.darkForceHits > 0;   // Força das Trevas: crítico garantido
-    const crit = forced || U.chance(0.5);
+    const crit = forced || (hasPara ? false : U.chance(0.5));
     const darkBlade = Game.wielded === 'dark'; // Corte das Trevas
     const blocked = this.E.defending;
     const tired = this.E.fatigued;
-    // névoa faz errar; o Espírito da Luz esquiva com graça
+    // névoa faz errar; o Espírito da Luz esquiva com graça; rajada afasta 50%
     const spiritDodge = this.E.spirit && !this.E.pacified && U.chance(this.E.dodge);
-    const missed = spiritDodge || (this.mistT > 0 && U.chance(0.75));
+    const missed = spiritDodge || (this.mistT > 0 && U.chance(0.75)) || (this.windBlastDebuff && U.chance(0.5)) || this.E.evadePhysical;
     const dmg = this.finalDmg(this.P.atk * (crit ? 2 : 1));
     this.push({
       dur: 16, msg: 'Você avança, a katana cantando luz...',
@@ -436,14 +699,20 @@ const Battle = {
       }
     });
     if (missed) {
+      let missMsg = 'Você corta apenas névoa — o espírito não estava ali!';
+      const S = this.cap(this.E.short);
+      if (spiritDodge) missMsg = 'O reflexo se desvia num passo sereno — você golpeia o vazio.';
+      else if (this.E.evadePhysical) missMsg = `${S} flutua graciosamente para trás, esquivando-se completamente do corte!`;
+      else if (this.windBlastDebuff) missMsg = 'A rajada de vento empurra seus braços — você erra o golpe!';
+
       this.push({
         dur: 34,
-        msg: spiritDodge
-          ? 'O reflexo se desvia num passo sereno — você golpeia o vazio.'
-          : 'Você corta apenas névoa — o espírito não estava ali!',
+        msg: missMsg,
         on: () => {
-          this.floater(this.EX, this.EY - 80, spiritDodge ? 'esquivou' : 'ERROU', spiritDodge ? '#ffe4a0' : '#b8c8d8');
-          if (spiritDodge) { this.anim.e = 'idle'; this.anim.ex = 44; }
+          const floaterTxt = spiritDodge || this.E.evadePhysical ? 'esquivou' : 'ERROU';
+          const floaterCol = spiritDodge || this.E.evadePhysical ? '#ffe4a0' : '#b8c8d8';
+          this.floater(this.EX, this.EY - 80, floaterTxt, floaterCol);
+          if (spiritDodge || this.E.evadePhysical) { this.anim.e = 'idle'; this.anim.ex = 44; }
           Sfx.flee();
         }
       });
@@ -453,6 +722,7 @@ const Battle = {
           this.anim.p = 'idle';
           Game.cam.targetZoom = 1.12;
           Game.cam.targetOffsetX = 0;
+          this.windBlastDebuff = false; // Consome o debuff de vento
         }
       });
       this.push({ dur: 1, on: () => this.afterPlayer() });
@@ -462,6 +732,7 @@ const Battle = {
       dur: 10,
       on: () => {
         this.E.hp = Math.max(0, this.E.hp - dmg);
+        this.recordAncestralHit(dmg);
         this.E.flash = 1;
         this.shake = crit ? 11 : 5;
         Sfx.hit(crit);
@@ -489,6 +760,7 @@ const Battle = {
         }
         if (crit) { this.msg = 'CRÍTICO! A lâmina atravessa o espírito.'; this.msgT = 0; }
         else if (blocked) { this.msg = 'A couraça elemental apara metade do corte.'; this.msgT = 0; }
+        this.windBlastDebuff = false; // Consome o debuff de vento
         this.sparks(this.EX, this.EY - 50, crit ? 16 : 9, Game.wielded === 'dark' ? '#c9a6ff' : '#ffe9b0');
         PlayerVFX.impact(this.EX, this.EY - 50,
           Game.wielded === 'dark' ? 'dark' : (Game.equipped || 'light'), crit);
@@ -512,15 +784,46 @@ const Battle = {
     this.sta = Math.min(this.P.maxSta, this.sta + 2);
     this.P.mp = Math.min(this.P.maxMp, this.P.mp + 3);
     this.playerDef = true;
+    const quenched = !!(this.playerBurn && this.playerBurn.extinguishable);
+    const eternal = !!(this.playerBurn && !this.playerBurn.extinguishable);
+    if (quenched) this.playerBurn = null;
     this.push({
-      dur: 40, msg: 'Você firma a postura — a luz se adensa em escudo. (+2 EST, +3 PM)',
+      dur: 40,
+      msg: quenched
+        ? 'Você firma a postura e sufoca a chama da Costela. O fogo se apaga! (+2 EST, +3 PM)'
+        : eternal
+          ? 'Você se protege, mas a marca de Vulcano arde por dentro e não se apaga. (+2 EST, +3 PM)'
+          : 'Você firma a postura — a luz se adensa em escudo. (+2 EST, +3 PM)',
       on: () => {
         this.anim.p = 'defend';
         Sfx.defend();
         PlayerVFX.shield(this.PX, this.PY, 'guard', false);
+        if (quenched) {
+          Particles.burst(this.PX, this.PY - 40, 12, () => ({
+            x: this.PX + U.rand(-14, 14), y: this.PY - U.rand(20, 66),
+            vx: U.rand(-0.7, 0.7), vy: U.rand(-1.4, -0.2), life: U.rand(20, 34),
+            size: U.rand(1.4, 2.7), color: 'rgba(135,220,255,0.72)', type: 'wisp'
+          }));
+        }
       }
     });
     this.push({ dur: 1, on: () => this.afterPlayer() });
+  },
+
+  actEscape() {
+    this.closeMenu();
+    const bonus = this.sta === this.P.maxSta ? 0.2 : 0;
+    const success = U.chance(0.6 + bonus);
+    this.push({
+      dur: 40, msg: success ? 'Você rompe as correntes de vento!' : 'As correntes de vento resistem!',
+      on: () => { Sfx.windGust(true); }
+    });
+    if (success) {
+      this.playerTrapped = 0;
+      this.push({ dur: 1, on: () => this.afterPlayer() });
+    } else {
+      this.push({ dur: 1, on: () => this.enemyTurn() });
+    }
   },
 
   // cura da luz: cada purificação fortalece suas magias com sustento
@@ -541,7 +844,7 @@ const Battle = {
   // Defesa da Luz: escudo sagrado — 75% de bloqueio e cura que cresce com purificações
   actLightGuard() {
     this.closeMenu();
-    this.P.mp -= 6;
+    this.spendMagic(6);
     const heal = Math.min(4 + Game.purified, this.P.maxHp - this.P.hp);
     this.push({
       dur: 45, msg: '盾 — Defesa da Luz! Um escudo sagrado floresce ao seu redor.',
@@ -562,7 +865,7 @@ const Battle = {
 
   actPurify() {
     this.closeMenu();
-    this.P.mp -= 7;
+    this.spendMagic(7);
     const pct = this.E.hp / this.E.maxHp;
     this.push({
       dur: 40, msg: '浄 — Você ergue a lâmina e entoa o canto da purificação...',
@@ -587,7 +890,7 @@ const Battle = {
 
   actAbsorb() {
     this.closeMenu();
-    this.P.mp -= 7;
+    this.spendMagic(7);
     const pct = this.E.hp / this.E.maxHp;
     this.push({
       dur: 40, msg: '闇 — A lâmina negra se abre como uma boca faminta...',
@@ -611,7 +914,7 @@ const Battle = {
 
   actDarkForce() {
     this.closeMenu();
-    this.P.mp -= 4;
+    this.spendMagic(4);
     this.push({
       dur: 45, msg: '暗 — Força das Trevas! Uma aura de KI roxo flamejante envolve o seu corpo.',
       on: () => {
@@ -650,7 +953,7 @@ const Battle = {
   // + 9 dissipação. Total visual: 36 frames, mantendo dano e custo originais.
   actDarkBolt() {
     this.closeMenu();
-    this.P.mp -= 5;
+    this.spendMagic(5);
     const dmg = this.finalDmg(8 + this.mAtk());
     this.push({
       dur: 5,
@@ -695,6 +998,12 @@ const Battle = {
   },
 
   resolveWaterImpact(dmg, pierce) {
+    const brokeCocoon = this.E.archetype === 'ancientGolem' && this.E.cocoonTurns > 0;
+    if (brokeCocoon) {
+      this.E.cocoonTurns = 0;
+      this.E.script = [];
+      this.anim.e = 'hurt';
+    }
     this.E.hp = Math.max(0, this.E.hp - dmg);
     this.E.flash = 1;
     this.E.hitT = 15;
@@ -704,7 +1013,15 @@ const Battle = {
     Game.cam.zoom = pierce ? 1.39 : 1.34;
     Game.freezeFrames = pierce ? 6 : 5;
     this.floater(this.EX, this.EY - 80, '-' + dmg, '#bceeff', true);
-    if (pierce) {
+    if (brokeCocoon) {
+      this.msg = 'PULSO DE ÁGUA! O casulo racha e a Chama Consumidora é interrompida.';
+      this.msgT = 0;
+      Particles.burst(this.EX, this.EY - 44, 24, () => ({
+        x: this.EX + U.rand(-25, 25), y: this.EY - 44 + U.rand(-30, 26),
+        vx: U.rand(-3.2, 3.2), vy: U.rand(-3.1, 1.2), life: U.rand(28, 48),
+        size: U.rand(1.6, 3.3), color: 'rgba(180,235,255,0.94)', type: 'spark'
+      }));
+    } else if (pierce) {
       this.msg = 'O elemento oposto PERFURA a couraça!';
       this.msgT = 0;
     }
@@ -873,6 +1190,11 @@ const Battle = {
 
   resolveFireImpact(dmg, pierce) {
     const isCrit = this.E.element === 'agua';
+    if (this.tryAbsorbEnemyFire(dmg)) {
+      PlayerVFX.impact(this.EX, this.EY - 50, 'fire', false);
+      this.castHeal();
+      return;
+    }
     this.E.hp = Math.max(0, this.E.hp - dmg);
     this.E.flash = 1;
     this.E.hitT = 15;
@@ -933,6 +1255,11 @@ const Battle = {
   },
 
   resolveFireBarrierImpact(dmg) {
+    if (this.tryAbsorbEnemyFire(dmg)) {
+      VFX.emit('fire', 'pillar', { x: this.EX, y: this.EY, heavy: false });
+      this.castHeal();
+      return;
+    }
     this.E.hp = Math.max(0, this.E.hp - dmg);
     this.E.flash = 1;
     this.E.hitT = 15;
@@ -998,7 +1325,7 @@ const Battle = {
   // Barragem: dano + barreira elemental que dura até seu próximo turno
   actBarrier(elem) {
     this.closeMenu();
-    this.P.mp -= 6;
+    this.spendMagic(6);
     const dmg = this.finalDmg(14 + this.mAtk());
     const agua = elem === 'agua';
     if (agua) {
@@ -1010,7 +1337,7 @@ const Battle = {
 
   actElemBolt(elem) {
     this.closeMenu();
-    this.P.mp -= 6;
+    this.spendMagic(6);
     const agua = elem === 'agua';
     const isCrit = elem === 'fogo' && this.E.element === 'agua'; // Incinerar contra espírito de água
     const pierce = this.E.defending && (
@@ -1036,6 +1363,7 @@ const Battle = {
     this.closeMenu();
     // recuar do Espírito nunca falha — mas a essência permanece perdida
     if (this.E.spirit) {
+      this.clearAncestralMark();
       this.over = true;
       this.push({
         dur: 40, msg: 'Você recua da própria luz. Ela apenas observa, paciente.',
@@ -1045,6 +1373,7 @@ const Battle = {
       return;
     }
     if (U.chance(0.65)) {
+      this.clearAncestralMark();
       this.over = true;
       this.push({
       dur: 40, msg: 'Você se desfaz em feixes de luz e escapa!',
@@ -1062,7 +1391,7 @@ const Battle = {
     }
   },
 
-  afterPlayer() {
+  afterPlayer(countAncestralAction = true) {
     // O Espírito nunca é destruído: interrompe o combate ao chegar a ~20%
     if (this.E.spirit && !this.E.pacified) {
       const thr = Math.ceil(this.E.maxHp * 0.2);
@@ -1072,14 +1401,184 @@ const Battle = {
       }
       return this.enemyTurn();
     }
-    if (this.E.hp <= 0) this.dissolveSequence();
+    // A vitória resolve antes do dano periódico: eliminar o inimigo nunca
+    // produz uma derrota simultânea injusta.
+    if (this.E.hp <= 0) return this.dissolveSequence();
+
+    if (this.E.tier === 13 && !this.E.stormPhase && this.E.hp <= this.E.maxHp * 0.35) {
+      return this.enterStormPhaseSequence();
+    }
+
+    if (this.ancestralMark && countAncestralAction) {
+      this.ancestralMark.actionsLeft = Math.max(0, this.ancestralMark.actionsLeft - 1);
+      if (this.ancestralMark.actionsLeft === 0) {
+        return this.detonateAncestralMark(this.ancestralMark);
+      }
+    }
+
+    if (this.playerTrapped > 0) {
+      const damage = Math.max(1, Math.round(this.E.soco * 0.4));
+      this.push({
+        dur: 30,
+        msg: `As correntes de vento apertam seu corpo! (−${damage} PV · ${this.playerTrapped} rodada${this.playerTrapped > 1 ? 's' : ''} restante${this.playerTrapped > 1 ? 's' : ''})`,
+        on: () => {
+          this.P.hp = Math.max(0, this.P.hp - damage);
+          this.anim.pFlash = 1;
+          this.floater(this.PX, this.PY - 92, '-' + damage, '#9ee8c8', false);
+          this.shake = 4;
+          Sfx.hurt();
+          Particles.burst(this.PX, this.PY - 20, 6, () => ({
+            x: this.PX + U.rand(-16, 16), y: this.PY - 20 + U.rand(-16, 16),
+            vx: U.rand(-1.2, 1.2), vy: U.rand(-1.2, 1.2),
+            life: 20, size: U.rand(1.2, 2.4), color: 'rgba(200,225,245,0.6)', type: 'spark'
+          }));
+        }
+      });
+      this.push({
+        dur: 1,
+        on: () => {
+          if (this.P.hp <= 0) this.defeatSequence();
+          else {
+            this.afterPlayerTrappedDamage();
+          }
+        }
+      });
+      return;
+    }
+
+    this.afterPlayerTrappedDamage();
+  },
+
+  enterStormPhaseSequence() {
+    this.E.stormPhase = true;
+    this.E.ult = Math.round(this.E.ult * 1.3);
+    this.closeMenu();
+    this.push({
+      dur: 65,
+      msg: 'O Rei do Vento solta um grito ensurdecedor! Os céus se escurecem e raios rasgam as nuvens...',
+      on: () => {
+        this.anim.e = 'magic';
+        Sfx.windSupreme();
+        this.lightningFlash = 6;
+        this.shake = 15;
+        Game.cam.zoom = 1.35;
+        Game.cam.targetOffsetX = -45;
+        if (window.BattleAtmosphere) {
+          BattleAtmosphere.setDarkness(0.9);
+        }
+      }
+    });
+    this.push({
+      dur: 40,
+      msg: 'A Tempestade Suprema desperta! (O Rei do Vento está mais agressivo e veloz)',
+      on: () => {
+        this.lightningFlash = 4;
+        this.anim.e = 'idle';
+        Game.cam.targetZoom = 1.12;
+        Game.cam.targetOffsetX = 0;
+        this.E.script = [];
+      }
+    });
+    this.push({ dur: 1, on: () => this.enemyTurn() });
+  },
+
+  afterPlayerTrappedDamage() {
+    if (this.playerBurn) {
+      const burn = this.playerBurn;
+      const damage = burn.damage;
+      const lastTick = burn.turns === 1;
+      this.push({
+        dur: 30,
+        msg: burn.source === 'vulcano'
+          ? `A marca de Vulcano queima por dentro! (−${damage} PV${lastTick ? ' · a chama enfim cessa' : ''})`
+          : `As chamas da Costela continuam ardendo! (−${damage} PV · Defender apaga)`,
+        on: () => {
+          this.P.hp = Math.max(0, this.P.hp - damage);
+          this.anim.pFlash = 1;
+          if (this.anim.p !== 'defend') this.anim.p = 'hurt';
+          this.floater(this.PX, this.PY - 92, '-' + damage, '#79d8ff', false);
+          this.shake = 5;
+          Sfx.hurt();
+          PlayerVFX.impact(this.PX, this.PY - 42, 'fire', false);
+        }
+      });
+      this.push({ dur: 1, on: () => this.afterPlayerBurn(lastTick) });
+      return;
+    }
+    this.enemyTurn();
+  },
+
+  afterPlayerBurn(clearBurn) {
+    if (clearBurn) this.playerBurn = null;
+    else if (this.playerBurn && Number.isFinite(this.playerBurn.turns)) this.playerBurn.turns--;
+    if (this.P.hp <= 0) this.defeatSequence();
     else this.enemyTurn();
   },
 
   // ── turno do inimigo ──
   ensureScript() {
+    if (this.E.archetype === 'ancientGolem') {
+      if (this.E.cocoonTurns > 0) {
+        this.E.script = [];
+        return;
+      }
+      if (!this.E.cocoonUsed && this.E.hp <= this.E.maxHp * 0.62) {
+        this.E.script = ['cocoon'];
+        return;
+      }
+    }
     if (this.E.script.length > 0) return;
-    if (this.E.isBoss) {
+    if (this.E.archetype === 'ashSkeleton') {
+      const patterns = [
+        ['costela', 'soco', 'defend'],
+        ['soco', 'costela', 'defend'],
+        ['costela', 'defend', 'soco']
+      ];
+      this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
+    } else if (this.E.element === 'vento') {
+      if (this.E.isBoss) {
+        if (this.E.stormPhase) {
+          const patterns = [
+            ['tornado', 'vendaval', 'suprema', 'investida', 'prisao'],
+            ['suprema', 'investida', 'vendaval', 'prisao', 'tornado'],
+            ['tornado', 'prisao', 'suprema', 'vendaval', 'investida']
+          ];
+          this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
+        } else {
+          const patterns = [
+            ['vendaval', 'defend', 'investida', 'prisao', 'tornado'],
+            ['tornado', 'soco', 'investida', 'defend', 'prisao'],
+            ['prisao', 'vendaval', 'defend', 'tornado', 'investida']
+          ];
+          this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
+        }
+      } else if (this.E.storm) {
+        const patterns = [
+          ['raio', 'explosao', 'charge_orb', 'paralisante'],
+          ['raio', 'charge_orb', 'paralisante', 'defend'],
+          ['explosao', 'raio', 'defend', 'charge_orb', 'paralisante']
+        ];
+        this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
+      } else {
+        const patterns = [
+          ['corte_aereo', 'esquiva', 'rajada', 'defend'],
+          ['corte_aereo', 'rajada', 'defend', 'esquiva'],
+          ['esquiva', 'corte_aereo', 'defend', 'rajada']
+        ];
+        this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
+      }
+    } else if (this.E.archetype === 'ancientGolem') {
+      if (this.E.vulcanoCharged) {
+        this.E.script = ['vulcano'];
+      } else {
+        const patterns = [
+          ['soco', 'vulcanoCharge', 'vulcano'],
+          ['vulcanoCharge', 'vulcano', 'soco'],
+          ['soco', 'soco', 'vulcanoCharge', 'vulcano']
+        ];
+        this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
+      }
+    } else if (this.E.isBoss) {
       if (this.E.element === 'fogo') {
         const patterns = [
           ['soco', 'mare', 'defend', 'charge', 'tsunami'],
@@ -1124,6 +1623,33 @@ const Battle = {
     }
   },
 
+  cocoonHealTurn() {
+    const remaining = this.E.cocoonTurns;
+    const heal = Math.max(1, Math.ceil(this.E.maxHp * this.E.cocoonHealPct));
+    const gained = Math.max(0, Math.min(heal, this.E.maxHp - this.E.hp));
+    this.push({
+      dur: 52,
+      msg: `CHAMA CONSUMIDORA — o casulo absorve o fogo do Reino. (+${gained} PV · ${remaining}/3)`,
+      on: () => {
+        this.anim.e = 'heal';
+        this.E.hp = Math.min(this.E.maxHp, this.E.hp + heal);
+        this.E.cocoonTurns = Math.max(0, this.E.cocoonTurns - 1);
+        if (gained > 0) this.floater(this.EX, this.EY - 94, '+' + gained, '#8ee6ff', true);
+        EnemyVFX.charge(this.E, this.EX, this.EY);
+        Sfx.tone({ f: 210, f2: 520, dur: 0.65, type: 'sine', vol: 0.12 });
+      }
+    });
+    if (remaining === 1) {
+      this.push({
+        dur: 34,
+        msg: 'As placas do casulo se abrem. O Golem volta a caçar.',
+        on: () => { this.anim.e = 'idle'; this.E.script = []; }
+      });
+    }
+    this.push({ dur: 10 });
+    this.push({ dur: 1, on: () => this.afterEnemy() });
+  },
+
   enemyTurn() {
     this.E.defending = false;
     this.E.fatigued = false;
@@ -1132,16 +1658,170 @@ const Battle = {
     // uma investida leve que passa de raspão — apenas um teste.
     if (this.E.spirit) return this.spiritTurn();
 
+    if (this.E.archetype === 'ancientGolem' && this.E.cocoonTurns > 0) {
+      return this.cocoonHealTurn();
+    }
+
     this.ensureScript();
-    const action = this.E.script.shift();
+    let action = this.E.script.shift();
+    if (this.E.archetype === 'ancientGolem' && action === 'vulcano' && !this.E.vulcanoCharged) {
+      this.E.script.unshift('vulcano');
+      action = 'vulcanoCharge';
+    }
     const S = this.cap(this.E.short);
     const fire = this.E.element === 'fogo';
+    const enemyMagicType = this.E.element === 'fogo'
+      ? 'fireMagic'
+      : this.E.element === 'agua'
+        ? 'waterMagic'
+        : this.E.element === 'vento'
+          ? 'windMagic'
+          : 'magic';
 
-    if (action === 'defend') {
+    if (action === 'cocoon' && this.E.archetype === 'ancientGolem') {
+      this.E.cocoonUsed = true;
+      this.E.cocoonTurns = 3;
+      // Chama Consumidora gasta a energia acumulada. Se o casulo for quebrado,
+      // o Golem precisa anunciar e refazer a Carga antes de lançar Vulcano.
+      this.E.vulcanoCharged = false;
+      this.E.script = [];
+      this.push({
+        dur: 64,
+        msg: 'ULTIMATE — CHAMA CONSUMIDORA! O Golem fecha as placas e puxa o fogo do Reino por 3 turnos.',
+        on: () => {
+          this.anim.e = 'cocoon';
+          EnemyVFX.charge(this.E, this.EX, this.EY);
+          Game.cam.targetZoom = 1.23;
+          Game.cam.targetOffsetX = -42;
+          Sfx.charge();
+          Particles.burst(this.EX, this.EY - 42, 22, i => ({
+            x: this.EX + U.rand(-150, 150), y: this.EY - 42 + U.rand(-100, 70),
+            vx: (this.EX - (this.EX + U.rand(-150, 150))) / 48,
+            vy: U.rand(-1.2, 1.2), life: 52 + i,
+            size: U.rand(1.8, 3.3), color: 'rgba(80,195,255,0.84)', type: 'wisp', drag: 0.98
+          }));
+        }
+      });
+      this.push({
+        dur: 24,
+        on: () => {
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'vulcanoCharge' && this.E.archetype === 'ancientGolem') {
+      this.push({
+        dur: 60,
+        msg: 'CARGA — a boca do Golem vira uma fornalha azul. Vulcano será o próximo ataque!',
+        on: () => {
+          this.E.vulcanoCharged = true;
+          this.anim.e = 'charge';
+          EnemyVFX.charge(this.E, this.EX, this.EY - 8);
+          Game.cam.targetZoom = 1.22;
+          Game.cam.targetOffsetX = -42;
+          Sfx.charge();
+        }
+      });
+      this.push({
+        dur: 18,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'vulcano' && this.E.archetype === 'ancientGolem') {
+      this.E.vulcanoCharged = false;
+      this.push({
+        dur: 18,
+        msg: 'VULCANO! O Golem cospe uma esfera ancestral que explode dentro da sua luz!',
+        on: () => {
+          this.anim.e = 'magic';
+          // A esfera permanece visível até o quadro real do impacto.
+          this.launchEnemyProjectile('vulcano', 42);
+          EnemyVFX.cast(this.E, this.EX, this.EY - 2, this.PX, this.PY - 42, 24, true);
+          Game.cam.targetZoom = 1.27;
+          Game.cam.targetOffsetX = -48;
+          Sfx.fire();
+        }
+      });
+      this.push({ dur: 22 });
+      this.push({
+        dur: 8,
+        on: () => {
+          this.hitPlayer(this.E.vulcanoDamage, 'fireMagic', true);
+          if (this.P.hp > 0) {
+            this.applyPlayerBurn({
+              damage: this.E.vulcanoBurnDamage,
+              turns: 3,
+              extinguishable: false,
+              source: 'vulcano'
+            });
+            this.floater(this.PX, this.PY - 122, 'VULCANO ×3', '#79d8ff', true);
+          }
+          this.ancestralBlast = { t: 0, dur: 28 };
+        }
+      });
+      this.push({
+        dur: 26,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'costela' && this.E.archetype === 'ashSkeleton') {
+      this.push({
+        dur: 16,
+        msg: 'COSTELA FLAMEJANTE! Um osso em chamas azuis gira na sua direção.',
+        on: () => {
+          this.anim.e = 'magic';
+          // A costela cruza toda a arena e só desaparece junto do acerto.
+          this.launchEnemyProjectile('costela', 37);
+          EnemyVFX.cast(this.E, this.EX, this.EY, this.PX, this.PY - 42, 22, true);
+          Game.cam.targetZoom = 1.2;
+          Game.cam.targetOffsetX = -34;
+          Sfx.fire();
+        }
+      });
+      this.push({ dur: 19 });
+      this.push({
+        dur: 8,
+        on: () => {
+          this.hitPlayer(this.E.mare, 'fireMagic', true);
+          if (this.P.hp > 0 && U.chance(this.E.ribBurnChance)) {
+            if (this.playerDef) {
+              this.floater(this.PX, this.PY - 120, 'APAGOU', '#dff8ff', false);
+              this.msg = 'A postura Defender sufoca as chamas antes que elas se prendam ao corpo.';
+            } else {
+              this.applyPlayerBurn({
+                damage: this.E.ribBurnDamage,
+                turns: null,
+                extinguishable: true,
+                source: 'costela'
+              });
+              this.floater(this.PX, this.PY - 120, 'EM CHAMAS', '#79d8ff', false);
+              this.msg = 'As chamas da Costela se agarram ao corpo — use Defender para apagá-las!';
+            }
+            this.msgT = 0;
+          }
+        }
+      });
+      this.push({
+        dur: 22,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'defend') {
       this.E.defending = true;
       this.push({
         dur: 40,
-        msg: fire ? `${S} endurece a lava em couraça de obsidiana.` : `${S} endurece as águas em couraça.`,
+        msg: this.E.archetype === 'ashSkeleton'
+          ? `${S} cruza braços e costelas — Defesa de Ossos bloqueia apenas 25% do dano.`
+          : (fire ? `${S} endurece a lava em couraça de obsidiana.` : `${S} endurece as águas em couraça.`),
         on: () => {
           this.anim.e = 'defend';
           EnemyVFX.guard(this.E, this.EX, this.EY);
@@ -1176,7 +1856,7 @@ const Battle = {
           Game.cam.targetOffsetX = -45;
         }
       });
-      this.push({ dur: 14, on: () => this.hitPlayer(this.E.ult, fire ? 'fogo' : 'agua', true) });
+      this.push({ dur: 14, on: () => this.hitPlayer(this.E.ult, enemyMagicType, true) });
       this.push({
         dur: 30,
         on: () => {
@@ -1200,7 +1880,7 @@ const Battle = {
           Game.cam.targetOffsetX = -45;
         }
       });
-      this.push({ dur: 12, on: () => this.hitPlayer(this.E.mare, fire ? 'fogo' : 'agua', true) });
+      this.push({ dur: 12, on: () => this.hitPlayer(this.E.mare, enemyMagicType, true) });
       this.push({
         dur: 24,
         on: () => {
@@ -1247,7 +1927,7 @@ const Battle = {
           Game.cam.targetOffsetX = -40;
         }
       });
-      this.push({ dur: 10, on: () => this.hitPlayer(this.E.soco, 'agua') });
+      this.push({ dur: 10, on: () => this.hitPlayer(this.E.soco, 'physical') });
       this.push({
         dur: 24,
         on: () => {
@@ -1283,7 +1963,7 @@ const Battle = {
       for (let i = 0; i < this.E.hits; i++) {
         this.push({
           dur: 12,
-          on: () => { this.anim.ex = -46 - U.rand(0, 18); this.hitPlayer(this.E.soco, 'fogo'); }
+          on: () => { this.anim.ex = -46 - U.rand(0, 18); this.hitPlayer(this.E.soco, enemyMagicType); }
         });
       }
       this.push({
@@ -1294,10 +1974,363 @@ const Battle = {
           Game.cam.targetOffsetX = 0;
         }
       });
+    } else if (action === 'corte_aereo') {
+      this.push({
+        dur: 18,
+        msg: `${S} mergulha do alto em um voo rasante de lâminas!`,
+        on: () => {
+          this.anim.e = 'attack';
+          this.anim.ex = -90;
+          EnemyVFX.attack(this.E, this.EX, this.EY, this.PX, this.PY - 42, 18, false);
+          Sfx.windSlash();
+          Game.cam.targetZoom = 1.22;
+          Game.cam.targetOffsetX = -40;
+        }
+      });
+      for (let i = 0; i < 2; i++) {
+        this.push({
+          dur: 10,
+          on: () => {
+            this.anim.ex = -70 - U.rand(0, 10);
+            this.hitPlayer(Math.round(this.E.soco * 0.75), 'windMagic');
+          }
+        });
+      }
+      this.push({
+        dur: 20,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'rajada') {
+      this.push({
+        dur: 38,
+        msg: `${S} bate as asas violentamente, soprando uma rajada de vento que desestabiliza sua postura!`,
+        on: () => {
+          this.anim.e = 'magic';
+          this.windBlastDebuff = true;
+          Sfx.windGust(false);
+          EnemyVFX.cast(this.E, this.EX, this.EY - 10, this.PX, this.PY - 42, 28, false);
+          Particles.burst(this.PX, this.PY - 42, 10, () => ({
+            x: this.PX + U.rand(-30, 30), y: this.PY - 42 + U.rand(-30, 30),
+            vx: -3 - U.rand(0, 3), vy: U.rand(-1, 1),
+            life: 25, size: U.rand(1.5, 2.5), color: 'rgba(210,235,245,0.8)', type: 'spark'
+          }));
+          Game.cam.targetZoom = 1.18;
+          Game.cam.targetOffsetX = -25;
+        }
+      });
+      this.push({
+        dur: 10,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'esquiva') {
+      this.push({
+        dur: 35,
+        msg: `${S} eleva-se no ar e entra em postura evasiva! (Ataques físicos errarão)`,
+        on: () => {
+          this.anim.e = 'idle';
+          this.E.evadePhysical = true;
+          this.anim.ex = 15;
+          Sfx.windGust(false);
+          EnemyVFX.guard(this.E, this.EX, this.EY);
+          Game.cam.targetZoom = 1.18;
+          Game.cam.targetOffsetX = -20;
+        }
+      });
+      this.push({
+        dur: 10,
+        on: () => {
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'raio') {
+      this.push({
+        dur: 20,
+        msg: `${S} lança um relâmpago direto da tempestade!`,
+        on: () => {
+          this.anim.e = 'magic';
+          this.launchEnemyProjectile('raio', 20);
+          EnemyVFX.cast(this.E, this.EX, this.EY - 15, this.PX, this.PY - 42, 14, false);
+          Game.cam.targetZoom = 1.2;
+          Game.cam.targetOffsetX = -30;
+          Sfx.windLightning(false);
+        }
+      });
+      this.push({ dur: 12 });
+      this.push({
+        dur: 8,
+        on: () => {
+          this.lightningFlash = 4;
+          this.hitPlayer(this.E.soco, 'windMagic');
+        }
+      });
+      this.push({
+        dur: 18,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'explosao') {
+      this.push({
+        dur: 24,
+        msg: `${S} descarrega uma explosão de energia estática ao seu redor!`,
+        on: () => {
+          this.anim.e = 'magic';
+          EnemyVFX.cast(this.E, this.EX, this.EY - 15, this.PX, this.PY - 42, 20, true);
+          Game.cam.targetZoom = 1.22;
+          Game.cam.targetOffsetX = -35;
+          Sfx.windLightning(true);
+        }
+      });
+      this.push({ dur: 10 });
+      this.push({
+        dur: 8,
+        on: () => {
+          this.lightningFlash = 5;
+          this.hitPlayer(Math.round(this.E.soco * 1.3), 'windMagic', true);
+        }
+      });
+      this.push({
+        dur: 20,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'charge_orb') {
+      this.push({
+        dur: 60,
+        msg: `${S} condensa uma imensa esfera de eletricidade estática! A Tempestade Paralisante se aproxima!`,
+        on: () => {
+          this.anim.e = 'charge';
+          this.E.orbCharged = true;
+          EnemyVFX.charge(this.E, this.EX, this.EY - 15);
+          Sfx.windCharge();
+          Game.cam.targetZoom = 1.22;
+          Game.cam.targetOffsetX = -40;
+        }
+      });
+      this.push({
+        dur: 15,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'paralisante') {
+      this.E.orbCharged = false;
+      this.push({
+        dur: 20,
+        msg: `${S} dispara o feixe condensado de Tempestade Paralisante!`,
+        on: () => {
+          this.anim.e = 'magic';
+          this.launchEnemyProjectile('raio', 24);
+          EnemyVFX.cast(this.E, this.EX, this.EY - 15, this.PX, this.PY - 42, 18, true);
+          Game.cam.targetZoom = 1.25;
+          Game.cam.targetOffsetX = -45;
+          Sfx.windLightning(true);
+        }
+      });
+      this.push({ dur: 15 });
+      this.push({
+        dur: 8,
+        on: () => {
+          this.lightningFlash = 6;
+          this.hitPlayer(Math.round(this.E.mare * 1.15), 'windMagic', true);
+          if (this.P.hp > 0) {
+            const defFactor = (this.playerDef || this.playerHoly || this.playerBarrier);
+            const paraChance = defFactor ? 0.15 : 0.75;
+            if (U.chance(paraChance)) {
+              this.playerParaT = 2;
+              this.floater(this.PX, this.PY - 120, 'PARALISADO', '#ffe178', true);
+              this.msg = 'A descarga elétrica paralisou seus músculos! (+2 EST por ataque, sem crítico)';
+              this.msgT = 0;
+            } else if (defFactor) {
+              this.floater(this.PX, this.PY - 120, 'RESISTIU', '#a8dcff', false);
+              this.msg = 'Sua postura defensiva absorveu a eletricidade, evitando a paralisia.';
+              this.msgT = 0;
+            }
+          }
+        }
+      });
+      this.push({
+        dur: 22,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'vendaval') {
+      this.push({
+        dur: 20,
+        msg: 'CORTE DO VENDAVAL! O Rei do Vento desfere dois cortes aéreos supersônicos!',
+        on: () => {
+          this.anim.e = 'attack';
+          this.anim.ex = -90;
+          EnemyVFX.attack(this.E, this.EX, this.EY - 30, this.PX, this.PY - 42, 16, true);
+          Sfx.windSlash();
+          Game.cam.targetZoom = 1.25;
+          Game.cam.targetOffsetX = -45;
+        }
+      });
+      for (let i = 0; i < 2; i++) {
+        this.push({
+          dur: 10,
+          on: () => {
+            this.anim.ex = -80 - U.rand(0, 15);
+            this.hitPlayer(Math.round(this.E.soco * 0.95), 'windMagic');
+          }
+        });
+      }
+      this.push({
+        dur: 20,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'investida') {
+      this.push({
+        dur: 15,
+        msg: 'INVESTIDA AÉREA! O Rei do Vento desaparece nas correntes de ar...',
+        on: () => {
+          this.E.dissolve = 1;
+          Sfx.windGust(false);
+          Game.cam.targetZoom = 1.25;
+          Game.cam.targetOffsetX = 10;
+        }
+      });
+      this.push({
+        dur: 15,
+        on: () => {
+          this.anim.ex = -200;
+          this.E.dissolve = 0;
+          this.anim.e = 'attack';
+          Sfx.windGust(true);
+        }
+      });
+      this.push({
+        dur: 15,
+        msg: '...e mergulha verticalmente em queda livre sobre você!',
+        on: () => {
+          this.anim.ex = -60;
+          EnemyVFX.attack(this.E, this.PX, this.PY - 100, this.PX, this.PY - 42, 10, true);
+          Game.cam.zoom = 1.35;
+          Game.cam.targetOffsetX = 50;
+        }
+      });
+      this.push({
+        dur: 8,
+        on: () => {
+          this.hitPlayer(Math.round(this.E.mare * 1.1), 'windMagic', true);
+        }
+      });
+      this.push({
+        dur: 20,
+        on: () => {
+          this.anim.e = 'idle';
+          this.anim.ex = 0;
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'tornado') {
+      this.push({
+        dur: 24,
+        msg: 'TORNADO! Um turbilhão espiral de vento varre toda a arena!',
+        on: () => {
+          this.anim.e = 'magic';
+          this.wave = { t: 0, dur: 55, wind: true };
+          Sfx.windMagic();
+          EnemyVFX.cast(this.E, this.EX, this.EY - 30, this.PX, this.PY - 42, 28, true);
+          Game.cam.targetZoom = 1.22;
+          Game.cam.targetOffsetX = -45;
+        }
+      });
+      this.push({ dur: 14, on: () => this.hitPlayer(Math.round(this.E.mare * 1.15), 'windMagic', true) });
+      this.push({
+        dur: 24,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'prisao') {
+      this.push({
+        dur: 30,
+        msg: 'PRISÃO DE VENTO! Correntes aéreas circulares se fecham ao seu redor!',
+        on: () => {
+          this.anim.e = 'magic';
+          this.playerTrapped = 3;
+          Sfx.windPrison();
+          EnemyVFX.cast(this.E, this.EX, this.EY - 30, this.PX, this.PY - 42, 22, true);
+          Particles.burst(this.PX, this.PY - 20, 15, () => ({
+            x: this.PX + U.rand(-40, 40), y: this.PY - 20 + U.rand(-40, 40),
+            vx: (this.PX - (this.PX + U.rand(-40, 40))) / 18,
+            vy: U.rand(-1, 1), life: 20, size: U.rand(1.5, 2.5),
+            color: 'rgba(200,225,245,0.7)', type: 'wisp'
+          }));
+          Game.cam.targetZoom = 1.25;
+          Game.cam.targetOffsetX = -30;
+        }
+      });
+      this.push({
+        dur: 15,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
+    } else if (action === 'suprema') {
+      this.push({
+        dur: 30,
+        msg: 'TEMPESTADE SUPREMA! O Rei do Vento convoca a tormenta absoluta!',
+        on: () => {
+          this.anim.e = 'magic';
+          this.wave = { t: 0, dur: 65, wind: true };
+          this.lightningFlash = 5;
+          Sfx.windSupreme();
+          EnemyVFX.cast(this.E, this.EX, this.EY - 30, this.PX, this.PY - 42, 35, true);
+          Game.cam.targetZoom = 1.3;
+          Game.cam.targetOffsetX = -50;
+        }
+      });
+      this.push({ dur: 18, on: () => {
+        this.lightningFlash = 8;
+        this.hitPlayer(this.E.ult, 'windMagic', true);
+      } });
+      this.push({
+        dur: 30,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
     } else {
       this.push({
         dur: 20,
-        msg: fire ? `${S} desfere um golpe de brasas!` : `${S} desfere um soco de maré!`,
+        msg: this.E.archetype === 'ashSkeleton'
+          ? `${S} salta para a frente e golpeia com os ossos em brasa azul!`
+          : this.E.archetype === 'ancientGolem'
+            ? `${S} descarrega um punho de rocha vulcânica!`
+            : (fire ? `${S} desfere um golpe de brasas!` : `${S} desfere um soco de maré!`),
         on: () => {
           this.anim.e = 'attack';
           this.anim.ex = -70;
@@ -1306,7 +2339,7 @@ const Battle = {
           Game.cam.targetOffsetX = -40;
         }
       });
-      this.push({ dur: 10, on: () => this.hitPlayer(this.E.soco, 'fisico') });
+      this.push({ dur: 10, on: () => this.hitPlayer(this.E.soco, 'physical') });
       this.push({
         dur: 24,
         on: () => {
@@ -1321,8 +2354,13 @@ const Battle = {
   },
 
   hitPlayer(base, kind, big) {
+    const damageType = ({
+      fogo: 'fireMagic', agua: 'waterMagic', vento: 'windMagic', fisico: 'physical'
+    })[kind] || kind;
     let dmg = base;
     let note = null;
+    let ancestralNote = null;
+    let ancestralHeal = 0;
     let barrierWeak = false;
     if (this.playerHoly) {
       // Defesa da Luz: 75% de bloqueio, sem fraqueza elemental
@@ -1330,19 +2368,44 @@ const Battle = {
       note = '盾 a luz apara!';
     } else if (this.playerBarrier) {
       // barreira elemental: fraca contra o elemento oposto (apenas água apaga barreira de fogo, fogo não evapora a de água)
-      const weak = (kind === 'agua' && this.playerBarrier === 'fogo');
+      const weak = (damageType === 'waterMagic' && this.playerBarrier === 'fogo');
       barrierWeak = weak;
       dmg = Math.max(1, Math.floor(dmg * (weak ? 0.75 : 0.5)));
       note = weak
         ? 'A água APAGA a barragem!'
         : '障 barragem: metade!';
     } else if (this.playerDef) {
-      dmg = Math.max(1, Math.floor(dmg / 2));
-      note = '守 metade!';
+      const reduction = this.playerParaT > 0 ? 0.75 : 0.5;
+      dmg = Math.max(1, Math.floor(dmg * reduction));
+      note = this.playerParaT > 0 ? '守 paralisado: -25%!' : '守 metade!';
+    }
+
+    // Passivas do Amuleto de Fogo Ancestral. Modificadores são aplicados
+    // depois de Defender/barreiras, como indicado pelos valores do HUD.
+    // Queimaduras e perigos de cenário não passam por hitPlayer e, portanto,
+    // jamais são convertidos em cura.
+    if (this.ancestralAmuletActive()) {
+      if (damageType === 'fireMagic') {
+        ancestralHeal = dmg * 0.20;
+        dmg -= ancestralHeal;
+        ancestralNote = 'ANCESTRAL: 20% absorvido';
+      } else if (damageType === 'waterMagic') {
+        dmg = Math.max(1, Math.round(dmg * 1.20));
+        ancestralNote = 'FRAQUEZA À ÁGUA: +20%';
+      } else if (damageType === 'physical') {
+        dmg = Math.max(1, Math.round(dmg * 1.15));
+        ancestralNote = 'CORPO INCENDIADO: +15% físico';
+      }
     }
     const shieldKind = this.playerHoly ? 'light'
       : (this.playerBarrier || (this.playerDef ? 'guard' : null));
-    this.P.hp = Math.max(0, this.P.hp - dmg);
+    const hpBefore = this.P.hp;
+    // O clamp acontece uma única vez, depois de dano e cura. Assim, a chama
+    // convertida reduz o impacto, mas nunca ressuscita o jogador após overkill.
+    const nextHp = U.clamp(hpBefore - dmg + ancestralHeal, 0, this.P.maxHp);
+    this.P.hp = Math.round(nextHp * 10) / 10;
+    const healed = this.P.hp > 0 ? ancestralHeal : 0;
+    const formatAmount = value => Number.isInteger(value) ? value : value.toFixed(1);
     this.anim.pFlash = 1;
     if (this.anim.p !== 'defend') this.anim.p = 'hurt';
     this.shake = big ? 16 : 7;
@@ -1352,9 +2415,17 @@ const Battle = {
     Game.freezeFrames = big ? 9 : 5;
     
     Sfx.hurt();
-    const col = kind === 'agua' ? '#7fd4ff' : kind === 'fogo' ? '#ffab66' : '#ffffff';
-    this.floater(this.PX, this.PY - 90, '-' + dmg, col, big);
+    const col = damageType === 'waterMagic' ? '#7fd4ff'
+      : damageType === 'fireMagic' ? '#75d9ff'
+      : damageType === 'windMagic' ? '#9ee8c8'
+      : '#ffffff';
+    this.floater(this.PX, this.PY - 90, '-' + formatAmount(dmg), col, big);
     if (note) this.floater(this.PX, this.PY - 116, note, note.includes('!') && note.length > 14 ? '#ff9a7a' : '#ffe9b0');
+    if (ancestralNote) this.floater(this.PX, this.PY - (note ? 140 : 116), ancestralNote, '#91e6ff');
+    if (healed > 0) {
+      this.floater(this.PX + 34, this.PY - 88, '+' + formatAmount(healed), '#9fffcf');
+      PlayerVFX.heal(this.PX, this.PY);
+    }
     if (shieldKind !== 'agua' && shieldKind !== 'fogo' && shieldKind !== 'light') {
       this.sparks(this.PX, this.PY - 40, 8, col === '#ffffff' ? '#ffd9a0' : col);
     }
@@ -1382,8 +2453,20 @@ const Battle = {
       this.shakeX = -3.2;
       this.shakeY = -0.8;
       VFX.hitBarrier('fire', { x: this.PX, y: this.PY - 34 });
-    } else if (shieldKind) PlayerVFX.block(this.PX, this.PY, shieldKind, kind);
-    else PlayerVFX.impact(this.PX, this.PY - 42, kind === 'agua' ? 'water' : kind === 'fogo' ? 'fire' : 'guard', !!big);
+    } else if (shieldKind) {
+      const incomingVfx = damageType === 'waterMagic'
+        ? 'water'
+        : damageType === 'fireMagic'
+          ? 'fire'
+          : damageType === 'windMagic'
+            ? 'wind'
+            : 'physical';
+      PlayerVFX.block(this.PX, this.PY, shieldKind, incomingVfx);
+    }
+    else PlayerVFX.impact(this.PX, this.PY - 42,
+      damageType === 'waterMagic' ? 'water'
+        : damageType === 'fireMagic' ? 'fire'
+          : damageType === 'windMagic' ? 'wind' : 'guard', !!big);
   },
 
   afterEnemy() {
@@ -1500,16 +2583,25 @@ const Battle = {
 
   // ── desfechos ──
   dissolveSequence() {
+    this.clearAncestralMark();
     this.over = true;
     const fire = this.E.element === 'fogo';
+    const ancestral = this.E.lightKind === 'blueFire';
+    const dissolveMsg = this.E.archetype === 'ancientGolem'
+      ? 'O Golem racha de dentro para fora — a chama ancestral abandona a rocha!'
+      : this.E.archetype === 'ashSkeleton'
+        ? 'Os ossos desabam e as chamas azuis se libertam!'
+        : (fire ? 'O espírito de fogo se desfaz em brasas!' : 'O espírito d\'água colapsa em chuva!');
     this.push({
-      dur: 55, msg: fire ? 'O espírito de fogo se desfaz em brasas!' : 'O espírito d\'água colapsa em chuva!',
+      dur: 55, msg: dissolveMsg,
       on: () => {
         Sfx.splash();
         Particles.burst(this.EX, this.EY - 50, 26, () => ({
           x: this.EX + U.rand(-24, 24), y: this.EY - 50 + U.rand(-30, 30),
           vx: U.rand(-3, 3), vy: fire ? U.rand(-3.5, -0.8) : U.rand(-5, -1), grav: fire ? 0 : 0.25,
-          life: 50, size: 3, color: fire ? 'rgba(255,146,76,0.92)' : 'rgba(140,210,255,0.9)',
+          life: 50, size: 3, color: ancestral
+            ? 'rgba(100,210,255,0.94)'
+            : (fire ? 'rgba(255,146,76,0.92)' : 'rgba(140,210,255,0.9)'),
           type: fire ? 'wisp' : 'drop'
         }));
         EnemyVFX.hit(this.E, this.EX, this.EY - 50, true);
@@ -1520,13 +2612,16 @@ const Battle = {
   },
 
   purifySequence() {
+    this.clearAncestralMark();
     this.over = true;
     this.push({
-      dur: 26, msg: 'A luz encontra uma fresta na correnteza—',
+      dur: 26, msg: this.E.lightKind === 'blueFire'
+        ? 'A luz encontra uma fresta entre os ossos e a chama ancestral—'
+        : 'A luz encontra uma fresta na correnteza—',
       on: () => { this.E.aura = 1; Sfx.purify(); }
     });
     this.push({
-      dur: 80, msg: 'O espírito d\'água se desfaz em luz!',
+      dur: 80, msg: 'O espírito se desfaz em luz!',
       on: () => {
         Particles.burst(this.EX, this.EY - 50, 30, () => ({
           x: this.EX + U.rand(-20, 20), y: this.EY - 40 + U.rand(-30, 20),
@@ -1540,6 +2635,7 @@ const Battle = {
   },
 
   absorbSequence() {
+    this.clearAncestralMark();
     this.over = true;
     this.push({
       dur: 26, msg: 'A escuridão encontra a fresta—',
@@ -1563,7 +2659,7 @@ const Battle = {
 
   // mode: 'won' (disperso em chuva) | 'purified' | 'absorbed'
   victory(mode) {
-    // Zoom dramático focado no samurai vitorioso (PX = 270)
+    this.clearAncestralMark();
     Game.cam.targetZoom = 1.25;
     Game.cam.targetOffsetX = -60;
     Game.cam.targetOffsetY = -30;
@@ -1573,7 +2669,6 @@ const Battle = {
     const xpGain = Math.round(this.E.xp * (claimed ? 1.5 : 1));
     const essGain = claimed ? 2 : 1;
 
-    // aplica tudo já; os passos abaixo só exibem
     Game.essences += essGain;
     if (mode === 'purified') {
       Game.purified++;
@@ -1599,7 +2694,9 @@ const Battle = {
       dur: 45,
       msg: mode === 'purified' ? 'Purificado, o espírito ascende — e agradece.'
         : mode === 'absorbed' ? 'Devorado, o espírito cala — e você sente fome de mais.'
-        : 'Vitória! As águas se aquietam.',
+        : this.E.lightKind === 'blueFire'
+          ? 'Vitória! As chamas azuis se curvam e o Vale silencia.'
+          : 'Vitória! As águas se aquietam.',
       on: () => { this.anim.p = 'victory'; if (mode === 'won') Sfx.victory(); }
     });
     this.push({
@@ -1622,7 +2719,7 @@ const Battle = {
     }
     for (const lv of levelsGained) {
       this.push({
-        dur: 65, msg: `✦ Nível ${lv}! A luz interior cresce. PV, PM e EST restaurados.`,
+        dur: 65, msg: `✦ Nível ${lv}! A luz interior cresce. 50% de PV e PM restaurados.`,
         on: () => {
           Sfx.levelup();
           Particles.burst(this.PX, this.PY - 40, 20, () => ({
@@ -1634,7 +2731,17 @@ const Battle = {
       });
     }
     if (this.E.isBoss) {
-      if (this.E.element === 'fogo') {
+      if (this.E.archetype === 'ancientGolem') {
+        this.push({
+          dur: 90,
+          msg: 'O carcereiro ancestral cai. Pela primeira vez, o santuário respira sem correntes.',
+          on: () => {
+            Game.ancientGolemDefeated = true;
+            Sfx.amulet();
+          }
+        });
+        this.push({ dur: 68, msg: 'A chama azul permanece no Vale — mas já não obedece ao Golem.' });
+      } else if (this.E.element === 'fogo') {
         this.push({
           dur: 90, msg: 'O Shōgun das Cinzas desmorona em brasas que esfriam...',
           on: () => {
@@ -1643,6 +2750,15 @@ const Battle = {
           }
         });
         this.push({ dur: 70, msg: 'As cinzas assentam sobre um trono vazio. A caverna respira.' });
+      } else if (this.E.element === 'vento') {
+        this.push({
+          dur: 90, msg: 'O Shōgun da Tempestade se desfaz em correntes de ar que enfim se aquietam...',
+          on: () => {
+            Game.windBossDefeated = true;
+            Sfx.amulet();
+          }
+        });
+        this.push({ dur: 68, msg: 'A essência do Vento se junta às que despertam o portal da aurora.' });
       } else {
         this.push({
           dur: 90, msg: 'O Shōgun Afogado se desfaz... e o lago inteiro suspira, liberto.',
@@ -1651,13 +2767,14 @@ const Battle = {
             Sfx.amulet();
           }
         });
-        this.push({ dur: 60, msg: 'Ao longe, o portal da aurora ACENDE — o caminho está livre.' });
+        this.push({ dur: 60, msg: 'A essência da Água desperta. Ainda são necessárias as dos três Shōguns.' });
       }
     }
     this.push({ dur: 1, on: () => Game.finishBattle(mode) });
   },
 
   defeatSequence() {
+    this.clearAncestralMark();
     this.over = true;
     this.push({
       dur: 80, msg: 'Sua luz vacila... e se apaga na correnteza.',
@@ -1689,6 +2806,131 @@ const Battle = {
         color: color || 'rgba(130,210,255,0.8)', type: 'ring'
       });
     }
+  },
+
+  launchEnemyProjectile(kind, dur) {
+    this.enemyProjectile = { kind, t: 0, dur: Math.max(1, dur || 22) };
+  },
+
+  drawEnemyProjectile(ctx, frames) {
+    const shot = this.enemyProjectile;
+    if (shot) {
+      const k = U.clamp(shot.t / shot.dur, 0, 1);
+      const eased = U.easeOut(k);
+      const x = U.lerp(this.EX - 18, this.PX + 10, eased);
+      const arc = shot.kind === 'vulcano' ? 74 : (shot.kind === 'raio' ? 0 : 34);
+      const y = U.lerp(this.EY - 50, this.PY - 46, eased) - Math.sin(k * Math.PI) * arc;
+      const angle = Math.atan2((this.PY - 46) - (this.EY - 50), (this.PX + 10) - (this.EX - 18)) + k * 8;
+      ctx.save();
+      ctx.translate(x, y);
+      if (shot.kind === 'costela') {
+        ctx.rotate(angle);
+        ctx.globalCompositeOperation = 'lighter';
+        const tail = ctx.createLinearGradient(5, 0, 40, 0);
+        tail.addColorStop(0, 'rgba(75,190,255,0.85)');
+        tail.addColorStop(1, 'rgba(30,80,255,0)');
+        ctx.fillStyle = tail;
+        ctx.beginPath(); ctx.moveTo(4, -5); ctx.quadraticCurveTo(25, -9, 42, 0); ctx.quadraticCurveTo(25, 9, 4, 5); ctx.closePath(); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = '#536b7c'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(0, 0, 12, -1.05, 1.05); ctx.stroke();
+        ctx.strokeStyle = '#e6f1ee'; ctx.lineWidth = 3.4;
+        ctx.beginPath(); ctx.arc(0, 0, 12, -1.05, 1.05); ctx.stroke();
+      } else if (shot.kind === 'raio') {
+        ctx.rotate(angle);
+        ctx.globalCompositeOperation = 'lighter';
+        const grad = ctx.createLinearGradient(0, 0, 40, 0);
+        grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+        grad.addColorStop(1, 'rgba(120,220,255,0)');
+        ctx.strokeStyle = grad; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(40, 0); ctx.stroke();
+      } else {
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 1; i <= 5; i++) {
+          const trailX = i * 13;
+          ctx.fillStyle = `rgba(42,145,255,${0.34 * (1 - i / 6)})`;
+          ctx.beginPath(); ctx.arc(trailX, Math.sin(frames * 0.18 + i) * 3, 12 - i * 1.4, 0, 7); ctx.fill();
+        }
+        const r = 13 + Math.sin(frames * 0.25) * 2;
+        const fireball = ctx.createRadialGradient(-3, -3, 1, 0, 0, r * 1.8);
+        fireball.addColorStop(0, 'rgba(244,254,255,1)');
+        fireball.addColorStop(0.28, 'rgba(105,215,255,0.98)');
+        fireball.addColorStop(0.7, 'rgba(35,105,255,0.8)');
+        fireball.addColorStop(1, 'rgba(15,45,180,0)');
+        ctx.fillStyle = fireball; ctx.beginPath(); ctx.arc(0, 0, r * 1.8, 0, 7); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    if (this.ancestralBlast) {
+      const k = this.ancestralBlast.t / this.ancestralBlast.dur;
+      const radius = 18 + U.easeOut(U.clamp(k, 0, 1)) * 92;
+      const blastX = this.ancestralBlast.target === 'enemy' ? this.EX : this.PX;
+      const blastY = this.ancestralBlast.target === 'enemy' ? this.EY - 50 : this.PY - 42;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.max(0, 1 - k);
+      const blast = ctx.createRadialGradient(blastX, blastY, 2, blastX, blastY, radius);
+      blast.addColorStop(0, 'rgba(230,252,255,0.9)');
+      blast.addColorStop(0.32, 'rgba(80,195,255,0.7)');
+      blast.addColorStop(1, 'rgba(30,70,255,0)');
+      ctx.fillStyle = blast; ctx.beginPath(); ctx.arc(blastX, blastY, radius, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(130,225,255,0.8)'; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(blastX, blastY, radius * 0.72, 0, 7); ctx.stroke();
+      ctx.restore();
+    }
+  },
+
+  drawAncestralIncinerate(ctx, frames) {
+    if (!this.ancestralMark || this.over) return;
+    const px = this.PX + this.anim.px;
+    const py = this.PY;
+    const pulse = 1 + Math.sin(frames * 0.14) * 0.08;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const aura = ctx.createRadialGradient(px, py - 42, 5, px, py - 42, 47 * pulse);
+    aura.addColorStop(0, 'rgba(205,250,255,0.24)');
+    aura.addColorStop(0.45, 'rgba(60,190,255,0.18)');
+    aura.addColorStop(1, 'rgba(20,70,255,0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath(); ctx.arc(px, py - 42, 47 * pulse, 0, 7); ctx.fill();
+    for (let i = 0; i < 8; i++) {
+      const phase = frames * (0.17 + i * 0.004) + i * 0.9;
+      const bx = px + Math.sin(phase) * (15 + (i % 2) * 5);
+      const by = py - 5 - (i % 4) * 16;
+      const h = 17 + (i % 3) * 5 + Math.sin(phase * 1.4) * 3;
+      const flame = ctx.createLinearGradient(bx, by, bx, by - h);
+      flame.addColorStop(0, 'rgba(30,105,255,0.52)');
+      flame.addColorStop(0.5, 'rgba(75,210,255,0.75)');
+      flame.addColorStop(1, 'rgba(225,253,255,0)');
+      ctx.fillStyle = flame;
+      ctx.beginPath();
+      ctx.moveTo(bx - 3.5, by);
+      ctx.quadraticCurveTo(bx - 5, by - h * 0.48, bx + Math.sin(phase * 1.3) * 3, by - h);
+      ctx.quadraticCurveTo(bx + 5, by - h * 0.45, bx + 3.5, by);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  },
+
+  drawPlayerBurn(ctx, frames) {
+    if (!this.playerBurn || this.over) return;
+    const eternal = !this.playerBurn.extinguishable;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < (eternal ? 7 : 5); i++) {
+      const phase = frames * (0.16 + i * 0.006) + i * 1.37;
+      const bx = this.PX + this.anim.px + Math.sin(phase) * (eternal ? 15 : 12);
+      const by = this.PY - 7 - (i % 3) * 17;
+      const h = (eternal ? 23 : 17) + Math.sin(phase * 1.3) * 5;
+      const flame = ctx.createLinearGradient(bx, by, bx, by - h);
+      flame.addColorStop(0, `rgba(35,95,255,${eternal ? 0.7 : 0.55})`);
+      flame.addColorStop(0.55, 'rgba(70,195,255,0.82)');
+      flame.addColorStop(1, 'rgba(220,250,255,0)');
+      ctx.fillStyle = flame;
+      ctx.beginPath(); ctx.moveTo(bx - 4, by); ctx.quadraticCurveTo(bx - 3, by - h * 0.5, bx + Math.sin(phase) * 3, by - h); ctx.quadraticCurveTo(bx + 4, by - h * 0.45, bx + 4, by); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
   },
 
   // ── renderização ──
@@ -1751,6 +2993,8 @@ const Battle = {
           ? null : (this.playerBarrier || (this.playerDef ? 'guard' : null))),
       runPhase: 0
     });
+    this.drawAncestralIncinerate(ctx, frames);
+    this.drawPlayerBurn(ctx, frames);
 
     // VFX Força das Trevas: aura de KI roxo circulando o samurai
     if (this.darkForceHits > 0 && !this.over) {
@@ -1824,15 +3068,27 @@ const Battle = {
       });
       ctx.restore();
     } else if (this.E.dissolve < 1) {
-      const drawEnemyFn = this.E.element === 'fogo' ? drawFireSamurai : drawWaterSamurai;
+      const drawEnemyFn = this.E.archetype === 'ashSkeleton'
+        ? drawBlueFlameSkeleton
+        : this.E.archetype === 'ancientGolem'
+          ? drawAncientFlameGolem
+          : this.E.element === 'vento'
+            ? (this.E.storm ? drawStormBattleSprite : drawWindBattleSprite)
+            : (this.E.element === 'fogo' ? drawFireSamurai : drawWaterSamurai);
+      const cocoonPose = this.E.cocoonTurns > 0 && this.anim.e === 'idle' ? 'cocoon' : this.anim.e;
       const opts = {
-        t: this.t + this.E.et, pose: this.anim.e, facing: -1,
+        t: this.t + this.E.et, pose: cocoonPose, facing: -1,
         flash: this.E.flash, aura: this.E.aura,
         auraCol: this.claimColor(),
         alpha: 1 - this.E.dissolve,
-        armT: this.anim.e === 'attack' ? Math.min(1, (this.t % 30) / 10) : 0
+        armT: this.anim.e === 'attack' ? Math.min(1, (this.t % 30) / 10) : 0,
+        extraLife: Math.max(0, this.E.hp - this.E.maxHp),
+        cocoonTurns: this.E.cocoonTurns,
+        chargeProgress: this.E.vulcanoCharged || this.anim.e === 'magic'
+          ? 1 : (this.anim.e === 'charge' ? 0.75 : 0.16),
+        stormPhase: !!this.E.stormPhase
       };
-      if (this.E.element === 'agua' && this.E.hitT > 0) {
+      if (!this.E.archetype && this.E.element === 'agua' && this.E.hitT > 0) {
         const damp = this.E.hitT / 15;
         const wave = Math.sin((15 - this.E.hitT) * 2.15) * damp;
         ctx.save();
@@ -1845,13 +3101,56 @@ const Battle = {
       }
     }
 
+    this.drawEnemyProjectile(ctx, frames);
     Particles.draw(ctx, 0, 0, 'front');
 
     // camada 5b da atmosfera: névoa rasteira emoldurando + partículas poéticas
     if (window.BattleAtmosphere) BattleAtmosphere.drawForegroundFx(ctx);
 
-    // onda de tsunami / chuva de meteoros
-    if (this.wave && this.wave.fire) {
+    // relâmpago estroboscópico na tela
+    if (this.lightningFlash && this.lightningFlash > 0) {
+      this.lightningFlash--;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.fillRect(0, 0, 960, 540);
+      ctx.restore();
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(200,240,255,0.95)';
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = '#7ddfff';
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      let rx = this.PX + U.rand(-80, 80);
+      ctx.moveTo(rx, 0);
+      ctx.lineTo(rx - 25, 120);
+      ctx.lineTo(rx + 15, 230);
+      ctx.lineTo(this.PX, this.PY - 40);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // onda de tsunami / chuva de meteoros / tornado de vento
+    if (this.wave && this.wave.wind) {
+      const k = this.wave.t / this.wave.dur;
+      const wx = U.lerp(this.EX, this.PX - 40, k);
+      ctx.save();
+      ctx.globalAlpha = k > 0.8 ? (1 - k) * 5 : 0.88;
+      ctx.strokeStyle = 'rgba(215,240,245,0.72)';
+      ctx.lineWidth = 2.4;
+      ctx.shadowColor = '#abdfeb';
+      ctx.shadowBlur = 8;
+      for (let i = 0; i < 9; i++) {
+        const h = i * 22;
+        const w = 18 + i * 8 + Math.sin(frames * 0.18 + i) * 6;
+        const phase = frames * 0.15 + i * 0.55;
+        const ox = Math.sin(phase) * w * 0.4;
+        ctx.beginPath();
+        ctx.ellipse(wx + ox, 430 - h, w, w * 0.28, 0, 0.15, 6.13);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (this.wave && this.wave.fire) {
       const k = this.wave.t / this.wave.dur;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -1899,6 +3198,7 @@ const Battle = {
       ctx.restore();
     }
 
+    let statusY = 30;
     // névoa em campo: bandas de bruma à deriva
     if (this.mistT > 0) {
       ctx.save();
@@ -1914,9 +3214,57 @@ const Battle = {
       // aviso de lâmina cega
       ctx.fillStyle = 'rgba(215,235,255,0.85)';
       ctx.font = '700 13px "Segoe UI", sans-serif';
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText(`霧 névoa: ataques erram 75% (${this.mistT} rodada${this.mistT > 1 ? 's' : ''}) — magias não erram`, 30, 30);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(`霧 névoa: ataques erram 75% (${this.mistT} rodada${this.mistT > 1 ? 's' : ''}) — magias não erram`, 30, statusY);
       ctx.restore();
+      statusY += 20;
+    }
+
+    // paralisia em campo
+    if (this.playerParaT > 0) {
+      ctx.save();
+      if (frames % 6 === 0) {
+        Particles.spawn({
+          x: this.PX + U.rand(-24, 24), y: this.PY - 34 + U.rand(-34, 34),
+          vx: U.rand(-0.6, 0.6), vy: U.rand(-0.6, 0.6),
+          life: 15, size: U.rand(1, 2.2), color: 'rgba(255,235,120,0.8)', type: 'spark'
+        });
+      }
+      ctx.fillStyle = 'rgba(255,225,120,0.85)';
+      ctx.font = '700 13px "Segoe UI", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(`痺 paralisia: atq custa +2 EST, sem crítico, def reduz 25% (${this.playerParaT} rodada${this.playerParaT > 1 ? 's' : ''})`, 30, statusY);
+      ctx.restore();
+      statusY += 20;
+    }
+
+    // prisão de vento em campo
+    if (this.playerTrapped > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(200,225,245,0.38)';
+      ctx.lineWidth = 2;
+      const angle = frames * 0.08;
+      ctx.beginPath();
+      ctx.ellipse(this.PX, this.PY - 20, 24, 10 + Math.sin(frames * 0.05) * 3, angle, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(200,225,245,0.85)';
+      ctx.font = '700 13px "Segoe UI", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(`牢 prisão: menu limitado, sofre dano por rodada (${this.playerTrapped} rodada${this.playerTrapped > 1 ? 's' : ''})`, 30, statusY);
+      ctx.restore();
+      statusY += 20;
+    }
+
+    // debuff de rajada de vento
+    if (this.windBlastDebuff) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(150,200,245,0.85)';
+      ctx.font = '700 13px "Segoe UI", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(`風 rajada: próximo ataque físico tem 50% de chance de errar`, 30, statusY);
+      ctx.restore();
+      statusY += 20;
     }
 
     ctx.restore();
@@ -1974,7 +3322,8 @@ const Battle = {
       lake:   ['#050b1e', '#103652'],
       boss:   ['#04061a', '#1a2456'],
       abyss:  ['#01030c', '#07234a'],
-      lava:   ['#160607', '#4a160d']
+      lava:   ['#160607', '#4a160d'],
+      wind:   ['#05081a', '#102040']
     }[env];
     const sky = ctx.createLinearGradient(0, 0, 0, 540);
     sky.addColorStop(0, cols[0]);
@@ -1998,7 +3347,7 @@ const Battle = {
         ctx.moveTo(tx + 66 - 28, 470); ctx.lineTo(tx + 66, 470 - th * 0.7); ctx.lineTo(tx + 66 + 28, 470);
         ctx.closePath(); ctx.fill();
       }
-    } else if (env !== 'abyss') {
+    } else if (env !== 'abyss' && env !== 'wind') {
       // lua
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -2026,6 +3375,16 @@ const Battle = {
         ctx.ellipse(tx, 470 - th, 42, 16, 0, 0, 7);
         ctx.ellipse(tx + 14, 470 - th + 26, 34, 13, 0, 0, 7);
         ctx.fill();
+      }
+    } else if (env === 'wind') {
+      // penhascos ventosos
+      ctx.fillStyle = '#060a1c';
+      for (let i = 0; i < 6; i++) {
+        const tx = (i * 180 + 30) % 1000;
+        const th = 200 + (i * 40) % 100;
+        ctx.beginPath();
+        ctx.moveTo(tx, 540); ctx.lineTo(tx, 540 - th); ctx.lineTo(tx + 120, 540);
+        ctx.closePath(); ctx.fill();
       }
     } else {
       // fundo do lago: estalagmites (os feixes de luz agora respiram na atmosfera)
@@ -2122,7 +3481,9 @@ const Battle = {
       ctx.fillStyle = '#9fb8d8';
       ctx.font = '11px "Segoe UI", sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(E.hp + ' / ' + E.maxHp, bx + bw, by - 10);
+      const extraHp = Math.max(0, E.hp - E.maxHp);
+      ctx.fillStyle = extraHp > 0 ? '#86e4ff' : '#9fb8d8';
+      ctx.fillText(E.hp + ' / ' + E.maxHp + (extraHp > 0 ? `  (+${extraHp} extra)` : ''), bx + bw, by - 10);
 
       // O glifo dá personalidade; o texto remove ambiguidade. Assim, o
       // jogador entende a leitura tática em uma olhada, sem mudar o script
@@ -2130,22 +3491,40 @@ const Battle = {
       if (this.menu.open && E.script.length) {
         const next = E.script[0];
         const fireE = E.element === 'fogo';
-        const info = {
+        const info = ({
           soco:    { k: '攻', c: '255,120,110', danger: false, label: 'GOLPE' },
+          costela: { k: '骨', c: '100,210,255', danger: true, label: 'COSTELA — DEFENDA' },
+          vulcanoCharge: { k: '蓄', c: '95,205,255', danger: true, label: 'CARGA DE VULCANO' },
+          vulcano: { k: '噴', c: '115,220,255', danger: true, label: 'VULCANO — DEFENDA' },
+          cocoon:  { k: '繭', c: '105,215,255', danger: true, label: 'CASULO IMINENTE — PREPARE PULSO' },
           multi:   { k: '連', c: '255,150,80', danger: true,  label: 'RAJADA — DEFENDA' },
           fatigue: { k: '疲', c: '170,230,150', danger: false, label: 'FADIGA — CASTIGUE' },
           nevoa:   { k: '霧', c: '215,235,255', danger: true,  label: 'NÉVOA — USE MAGIA' },
           mare:    fireE
             ? { k: '炎', c: '255,160,80', danger: true, label: 'ERUPÇÃO — DEFENDA' }
             : { k: '潮', c: '120,240,255', danger: true, label: 'MARÉ — DEFENDA' },
-          defend:  { k: '守', c: fireE ? '255,170,100' : '130,200,255', danger: false, label: 'DEFESA — DANO REDUZIDO' },
+          defend: E.archetype === 'ashSkeleton'
+            ? { k: '骨', c: '110,215,255', danger: false, label: 'DEFESA DE OSSOS — BLOQUEIA 25%' }
+            : { k: '守', c: fireE ? '255,170,100' : '130,200,255', danger: false, label: 'DEFESA — DANO REDUZIDO' },
           charge:  fireE
             ? { k: '炎', c: '255,160,80', danger: true, label: 'CARGA — DEFENDA' }
             : { k: '波', c: '150,230,255', danger: true, label: 'CARGA — DEFENDA' },
           tsunami: fireE
             ? { k: '隕', c: '255,160,80', danger: true, label: 'METEOROS — DEFENDA' }
-            : { k: '波', c: '150,230,255', danger: true, label: 'TSUNAMI — DEFENDA' }
-        }[next];
+            : { k: '波', c: '150,230,255', danger: true, label: 'TSUNAMI — DEFENDA' },
+          corte_aereo: { k: '連', c: '150,200,245', danger: true, label: 'RAJADA — DEFENDA' },
+          rajada:    { k: '風', c: '150,200,245', danger: true, label: 'RAJADA — USE MAGIA' },
+          esquiva:   { k: '翔', c: '150,200,245', danger: false, label: 'ESQUIVA — MAGIA ACERTA' },
+          raio:      { k: '雷', c: '110,210,255', danger: true, label: 'RAIO — DEFENDA' },
+          explosao:  { k: '爆', c: '110,210,255', danger: true, label: 'EXPLOSÃO — DEFENDA' },
+          charge_orb: { k: '球', c: '110,210,255', danger: true, label: 'CARGA — DEFENDA' },
+          paralisante: { k: '痺', c: '110,210,255', danger: true, label: 'PARALISANTE — DEFENDA' },
+          vendaval:  { k: '斬', c: '150,200,245', danger: true, label: 'VENDAVAL — DEFENDA' },
+          investida: { k: '翔', c: '150,200,245', danger: true, label: 'INVESTIDA — DEFENDA' },
+          tornado:   { k: '旋', c: '150,200,245', danger: true, label: 'TORNADO — DEFENDA' },
+          prisao:    { k: '牢', c: '150,200,245', danger: true, label: 'PRISÃO — ESCAPE' },
+          suprema:   { k: '嵐', c: '120,180,245', danger: true, label: 'SUPREMA — DEFENDA' }
+        }[next] || { k: '？', c: '190,210,235', danger: false, label: String(next || 'AÇÃO').toUpperCase() });
         const ix = this.EX, iy = this.EY - 60 * this.eScale() - 34;
         const rr = info.danger ? 18 + Math.sin(frames * 0.25) * 2.5 : 16;
         ctx.save();
@@ -2173,6 +3552,17 @@ const Battle = {
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
         ctx.fillText(info.label, bx, by + 27);
         ctx.restore();
+      }
+
+      if (E.cocoonTurns > 0) {
+        ctx.fillStyle = 'rgba(9,24,42,0.9)';
+        ctx.fillRect(bx, by + 19, 244, 22);
+        ctx.strokeStyle = 'rgba(105,215,255,0.65)';
+        ctx.strokeRect(bx + 0.5, by + 19.5, 243, 21);
+        ctx.fillStyle = '#9ee8ff';
+        ctx.font = '700 10px "Segoe UI", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`繭 CHAMA CONSUMIDORA · ${E.cocoonTurns} cura${E.cocoonTurns > 1 ? 's' : ''} restante${E.cocoonTurns > 1 ? 's' : ''} · PULSO interrompe`, bx + 8, by + 34);
       }
     }
 
@@ -2233,6 +3623,38 @@ const Battle = {
       bar('battle-player-hp', py + 32, P.hp, P.maxHp, '#ffe08a', '#d98a2b', 'PV', true);
       bar('battle-player-sta', py + 50, this.sta, P.maxSta, '#b6ff9e', '#3e9e4f', 'EST');
       bar('battle-player-mp', py + 68, P.mp, P.maxMp, '#a8c8ff', '#5a6ee0', 'PM');
+
+      if (this.ancestralMark && !this.over) {
+        const markY = py - (this.playerBurn ? 48 : 24);
+        const actions = this.ancestralMark.actionsLeft;
+        const hits = this.ancestralMark.hits;
+        ctx.fillStyle = 'rgba(12,38,72,0.95)';
+        ctx.fillRect(px, markY, pw, 20);
+        ctx.strokeStyle = 'rgba(105,220,255,0.82)';
+        ctx.strokeRect(px + 0.5, markY + 0.5, pw - 1, 19);
+        ctx.fillStyle = '#a9edff';
+        ctx.font = '700 10px "Segoe UI", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`蒼 MARCA: ${hits} carga${hits === 1 ? '' : 's'} · ${actions} ação${actions === 1 ? '' : 'ões'} · dano oculto`, px + 9, markY + 14);
+      }
+
+      if (this.playerBurn && !this.over) {
+        const eternal = !this.playerBurn.extinguishable;
+        const turns = Number.isFinite(this.playerBurn.turns) ? ` · ${this.playerBurn.turns} turno${this.playerBurn.turns > 1 ? 's' : ''}` : '';
+        ctx.fillStyle = eternal ? 'rgba(18,45,84,0.94)' : 'rgba(13,35,62,0.94)';
+        ctx.fillRect(px, py - 24, pw, 20);
+        ctx.strokeStyle = eternal ? 'rgba(105,215,255,0.82)' : 'rgba(80,185,255,0.62)';
+        ctx.strokeRect(px + 0.5, py - 23.5, pw - 1, 19);
+        ctx.fillStyle = '#9ee8ff';
+        ctx.font = '700 10px "Segoe UI", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(
+          eternal
+            ? `藍 VULCANO: −${this.playerBurn.damage} PV após sua ação${turns} · impossível apagar`
+            : `藍 EM CHAMAS: −${this.playerBurn.damage} PV após sua ação · Defender apaga`,
+          px + 9, py - 10
+        );
+      }
     }
 
     // ── menu de comandos ──

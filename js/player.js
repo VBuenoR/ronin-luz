@@ -301,7 +301,10 @@ class Player {
     this.level = 1; this.xp = 0;
     this.maxHp = 40; this.hp = 40;
     this.maxMp = 10; this.mp = 10;
-    this.maxSta = 10;
+    this.maxSta = 10; this.sta = 10;
+    this.gliding = false; this.glideDrainT = 0; this.staRegenT = 0;
+    this.meditating = false; this.meditationT = 0;
+    this.healHoldTimer = 0; this.lastHp = this.hp;
   }
 
   // dano físico: base + nível + bênçãos da luz (1/3 purificações) + fome da escuridão (2 a cada 2 absorções)
@@ -324,11 +327,94 @@ class Player {
   levelUp() {
     this.level++;
     this.maxHp += 6; this.maxMp += 2; this.maxSta += 1;
-    this.hp = this.maxHp; this.mp = this.maxMp;
+    this.hp = Math.min(this.maxHp, Math.round((this.hp + this.maxHp * 0.5) * 10) / 10);
+    this.mp = Math.min(this.maxMp, Math.round((this.mp + this.maxMp * 0.5) * 10) / 10);
+    this.sta = this.maxSta;
+  }
+
+  setMeditating(active) {
+    this.meditating = !!active;
+    this.meditationT = 0;
+    this.healHoldTimer = 0;
+    this.lastHp = this.hp;
+    if (!this.meditating) return;
+
+    this.vx = 0; this.vy = 0;
+    this.dashT = 0; this.attackT = 0; this.jumpBuf = 0;
+    this.grabbing = false; this.gliding = false;
+  }
+
+  updateMeditation() {
+    this.meditationT++;
+    this.vx = 0; this.vy = 0;
+    this.dashT = 0; this.attackT = 0; this.jumpBuf = 0;
+    this.grabbing = false; this.gliding = false;
+    this.healHoldTimer = 0;
+
+    this.sta = Math.min(this.maxSta, Math.round((this.sta + 0.10) * 100) / 100);
+
+    // O torii carrega por 3 segundos (180 quadros) e restaura 100% de PV e PM.
+    if (this.meditationT < 180) {
+      if (this.meditationT % 8 === 0) {
+        for (let i = 0; i < 2; i++) {
+          Particles.spawn({
+            x: this.x + U.rand(-18, 18), y: this.y - U.rand(2, 22),
+            vx: U.rand(-0.4, 0.4), vy: U.rand(-1.5, -0.7),
+            life: U.rand(24, 38), size: U.rand(1.7, 2.9),
+            color: i ? 'rgba(171,235,190,0.85)' : 'rgba(255,226,150,0.92)',
+            type: 'wisp', drag: 0.95
+          });
+        }
+      }
+    } else if (this.meditationT === 180) {
+      this.hp = this.maxHp;
+      this.mp = this.maxMp;
+      this.sta = this.maxSta;
+      PlayerVFX.heal(this.x, this.y);
+      Sfx.tone({ f: 523, f2: 784, dur: 0.35, type: 'sine', vol: 0.1 });
+      if (typeof Hud !== 'undefined' && Hud.toast) {
+        Hud.toast('✦ Torii: Vida e Mana plenamente restauradas!', '#9fffe0');
+      }
+    } else {
+      this.hp = this.maxHp;
+      this.mp = this.maxMp;
+      this.sta = this.maxSta;
+      if (this.meditationT % 30 === 0) {
+        Particles.spawn({
+          x: this.x + U.rand(-10, 10), y: this.y - U.rand(4, 16),
+          vx: U.rand(-0.2, 0.2), vy: U.rand(-1.2, -0.6),
+          life: 30, size: 2,
+          color: 'rgba(255,240,190,0.7)', type: 'wisp'
+        });
+      }
+    }
+  }
+
+  updateHealSkill() {
+    const canChannel = Game.state === 'explore'
+      && Input.is('healSkill')
+      && this.onGround && !this.inWater
+      && this.dashT <= 0 && this.attackT <= 0
+      && !this.meditating;
+    if (!canChannel) {
+      this.healHoldTimer = 0;
+      return;
+    }
+
+    if (++this.healHoldTimer < 20) return;
+    this.healHoldTimer = 0;
+    if (this.mp < 2 || (this.hp >= this.maxHp && this.sta >= this.maxSta)) return;
+
+    this.mp = Math.max(0, this.mp - 2);
+    this.hp = Math.min(this.maxHp, this.hp + 2);
+    this.sta = Math.min(this.maxSta, this.sta + 2);
+    PlayerVFX.heal(this.x, this.y);
+    Sfx.tone({ f: 523, f2: 659, dur: 0.15, type: 'sine', vol: 0.05 });
   }
 
   update() {
     this.t++;
+    this.gliding = false;
     if (this.attackT > 0) this.attackT--;
     if (this.attackCd > 0) this.attackCd--;
     if (this.dashCd > 0) this.dashCd--;
@@ -339,7 +425,18 @@ class Player {
     if (this.dropT > 0) this.dropT--;
     if (this.steerLock > 0) this.steerLock--;
 
+    const tookDamage = this.hp < this.lastHp - 0.001;
+    const meditationMove = Input.is('left') || Input.is('right')
+      || Input.is('downKey') || Input.is('jump') || Input.is('dash');
+    if (this.meditating && (tookDamage || meditationMove)) this.setMeditating(false);
+
     if (Input.pressed('jump')) this.jumpBuf = 7;
+
+    if (this.meditating) {
+      this.updateMeditation();
+      this.lastHp = this.hp;
+      return;
+    }
 
     // dentro d'água?
     const wasInWater = this.inWater;
@@ -362,7 +459,28 @@ class Player {
     let move = (R ? 1 : 0) - (L ? 1 : 0);
     if (this.steerLock > 0) move = 0;
 
-    if (this.dashT > 0) {
+    if (Game.developerMode) {
+      // Free flight still uses the regular collision pass below.
+      const vertical = (Input.is('downKey') ? 1 : 0) -
+        ((Input.is('up') || Input.is('jump')) ? 1 : 0);
+      const boosting = Input.keys.ShiftLeft || Input.keys.ShiftRight;
+      const speed = boosting ? 8.5 : 5.2;
+      this.grabbing = false;
+      this.gliding = false;
+      this.dashT = 0;
+      this.jumpBuf = 0;
+      this.canAirDash = true;
+      this.canDoubleJump = true;
+      this.vx = U.lerp(this.vx, move * speed, move ? 0.32 : 0.22);
+      this.vy = U.lerp(this.vy, vertical * speed, vertical ? 0.32 : 0.22);
+      if (move !== 0) this.facing = move;
+
+      if (Input.pressed('attack') && this.attackCd <= 0) {
+        this.attackT = 12; this.attackCd = 22;
+        Sfx.slash();
+        PlayerVFX.slash(this.x + this.facing * 12, this.y - 24, this.facing, 0.62, this.vfxKind());
+      }
+    } else if (this.dashT > 0) {
       // ── dash ──
       this.dashT--;
       const isWind = Game.equipped === 'wind';
@@ -434,10 +552,29 @@ class Player {
 
       this.vy = Math.min(this.vy + 0.55, 12);
 
-      // agarrar parede
+      // Asas da Fenix: depois do salto, segurar pulo reduz a queda e preserva
+      // o impulso horizontal. O vigor se recupera apenas em terreno seguro.
       this.grabbing = false;
+      const wantsWall = this.wallDir !== 0 &&
+        ((this.wallDir === 1 && R) || (this.wallDir === -1 && L));
+      const canGlide = window.WindKingdom && WindKingdom.canPlayerGlide(this);
+      this.gliding = !!(canGlide && !this.onGround && !wantsWall && Input.is('jump') && this.vy > -2.4);
+      if (this.gliding) {
+        this.staRegenT = 0;
+        this.vy = Math.min(this.vy, 1.18) - 0.24;
+        this.vx *= 0.996;
+        if (++this.glideDrainT >= 20) {
+          this.sta = Math.max(0, this.sta - 1);
+          this.glideDrainT = 0;
+        }
+        if (this.t % 8 === 0) WindKingdom.spawnPhoenixTrail(this);
+      } else {
+        this.glideDrainT = 0;
+      }
+
+      // agarrar parede
       if (!this.onGround && this.wallDir !== 0 &&
-          ((this.wallDir === 1 && R) || (this.wallDir === -1 && L))) {
+          wantsWall) {
         this.grabbing = true;
         this.canAirDash = true;
         this.canDoubleJump = true;
@@ -550,11 +687,19 @@ class Player {
       this.coyote = 7;
       this.canAirDash = true;
       this.canDoubleJump = true;
+      if (!this.gliding && this.sta < this.maxSta && ++this.staRegenT >= 12) {
+        this.sta = Math.min(this.maxSta, this.sta + 1);
+        this.staRegenT = 0;
+      }
       if (wasAir) {
         this.dust(5);
         PlayerVFX.jump(this.x, this.y, this.facing, this.vfxKind(), false);
       }
+    } else if (!this.gliding) {
+      this.staRegenT = 0;
     }
+
+    this.updateHealSkill();
 
     if (Math.abs(this.vx) > 0.4 && this.onGround) {
       this.runPhase += Math.abs(this.vx) * 0.09;
@@ -573,6 +718,7 @@ class Player {
         color: 'rgba(140,85,235,0.75)', type: 'wisp'
       });
     }
+    this.lastHp = this.hp;
   }
 
   dust(n) {
@@ -584,6 +730,7 @@ class Player {
   }
 
   pose() {
+    if (this.meditating) return 'kneel';
     if (this.dashT > 0) return 'dash';
     if (this.attackT > 0) return 'slash';
     if (this.inWater) return 'swim';
@@ -595,6 +742,9 @@ class Player {
 
   draw(ctx, cam) {
     if (this.invuln > 0 && (this.t % 8 < 3)) return;
+    if (this.gliding && window.WindKingdom && WindKingdom.drawPhoenixWings) {
+      WindKingdom.drawPhoenixWings(ctx, this.x - cam.x, this.y - cam.y, 1.05, this.facing, this.t);
+    }
     drawLightSamurai(ctx, this.x - cam.x, this.y - cam.y, 1.05, {
       facing: this.facing,
       pose: this.pose(),

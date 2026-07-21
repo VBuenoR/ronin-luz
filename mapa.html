@@ -13,12 +13,12 @@
 <div id="err"></div>
 <canvas id="map"></canvas>
 <script src="js/Utilities/utils.js?v=9"></script>
-<script src="js/Utilities/audio.js?v=9"></script>
-<script src="js/Utilities/input.js?v=9"></script>
+<script src="js/Utilities/audio.js?v=10"></script>
+<script src="js/Utilities/input.js?v=12"></script>
 <script src="js/Graphics/Particles.js?v=9"></script>
-<script src="js/world.js?v=9"></script>
-<script src="js/player.js?v=9"></script>
-<script src="js/enemies.js?v=9"></script>
+<script src="js/world.js?v=26"></script>
+<script src="js/player.js?v=23"></script>
+<script src="js/enemies.js?v=14"></script>
 <script>
 'use strict';
 // stub do Game para as funções de desenho do mundo
@@ -88,7 +88,7 @@ try {
     [3200, 1090, 'O VÃO PARTIDO'],
     [4400, 690, 'BOSQUE SUSPENSO'],
     [4700, 60, 'COPAS SUSSURRANTES'],
-    [2830, 110, 'PORTAL DO VENTO ◉ (EM BREVE)'],
+    [2830, 110, 'PORTAL DO VENTO ◉'],
     [5610, 800, 'VAPOR TERMAL ↑'],
     [5560, 1140, 'JARDIM DAS MARÉS'],
     [5560, 1760, 'PROFUNDEZAS SEM SOL'],
@@ -99,11 +99,12 @@ try {
     [7250, 1000, 'PORTAL DA AURORA'],
     [6600, 1660, 'SALÃO AFOGADO'],
     [7150, 2200, 'TRONO AFOGADO ♛'],
-    [6175, 860, 'PORTÃO SELADO']
+    [6175, 860, '']
   ];
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const [x, y, txt] of labels) {
+    if(!txt) continue;
     ctx.font = '700 ' + Math.max(10, 26 * S) + 'px "Segoe UI", sans-serif';
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(0,0,0,0.85)';
@@ -120,4 +121,3 @@ try {
 </script>
 </body>
 </html>
-

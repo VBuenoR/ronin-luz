@@ -105,6 +105,8 @@ const Hud = {
 
   draw(ctx) {
     const p = Game.player;
+    const resource = value => Math.abs(value - Math.round(value)) < 0.01
+      ? Math.round(value) : value.toFixed(1);
 
     // ── painel de status ──
     ctx.save();
@@ -161,16 +163,17 @@ const Hud = {
     ctx.fillStyle = '#b9cce5';
     ctx.font = '9px "Segoe UI", sans-serif';
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(p.hp + '/' + p.maxHp + ' PV', 66, 70);
-    ctx.fillText(p.mp + '/' + p.maxMp + ' PM', 140, 70);
+    ctx.fillText(resource(p.hp) + '/' + p.maxHp + ' PV', 66, 70);
+    ctx.fillText(resource(p.mp) + '/' + p.maxMp + ' PM', 140, 70);
 
     // essências
-    const gOpen = World.gate.openT >= 1;
-    const need = World.gate.cost;
+    const shogunEssences = Game.shogunEssenceCount();
+    const gOpen = Game.hasAllShogunEssences();
+    const need = 3;
     ctx.textBaseline = 'middle';
-    for (let i = 0; i < Math.max(need, Math.min(Game.essences, 6)); i++) {
+    for (let i = 0; i < need; i++) {
       const ex = 260 + i * 20, ey = 28;
-      const filled = Game.essences > i;
+      const filled = shogunEssences > i;
       ctx.save();
       if (filled) {
         ctx.globalCompositeOperation = 'lighter';
@@ -190,13 +193,14 @@ const Hud = {
     ctx.fillStyle = '#9fb8d8';
     ctx.font = '9px "Segoe UI", sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(gOpen ? 'essências' : 'essências — o portão pede ' + need, 252, 48);
+    ctx.fillText(gOpen ? 'essências dos Shōguns — portal ativo' : `essências dos Shōguns — ${shogunEssences}/${need}`, 252, 48);
 
     // amuleto
     if (Game.equipped) {
       const sui = Game.equipped === 'sui';
       const ka = Game.equipped === 'ka';
       const wind = Game.equipped === 'wind';
+      const ancestralKa = ka && Game.fireAmuletForm === 'ancestral';
       const ax = 262, ay = 66;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -210,13 +214,29 @@ const Hud = {
         ctx.bezierCurveTo(ax - 4, ay + 4, ax - 5, ay - 1, ax, ay - 6);
         ctx.fill();
       } else if (ka) {
-        ctx.fillStyle = '#ffcf9a';
-        ctx.shadowColor = '#ff9a50';
+        ctx.fillStyle = ancestralKa ? '#b9f4ff' : '#ffcf9a';
+        ctx.shadowColor = ancestralKa ? '#2bbcff' : '#ff9a50';
         ctx.beginPath();
         ctx.moveTo(ax, ay - 7);
         ctx.bezierCurveTo(ax + 6, ay - 1, ax + 5, ay + 4, ax, ay + 5);
         ctx.bezierCurveTo(ax - 5, ay + 4, ax - 6, ay - 1, ax, ay - 7);
         ctx.fill();
+        if (ancestralKa) {
+          // O núcleo escuro e as duas centelhas distinguem a forma ancestral
+          // sem aumentar a área permanente ocupada pelo HUD.
+          ctx.fillStyle = '#248dff';
+          ctx.shadowColor = '#66dcff';
+          ctx.beginPath();
+          ctx.moveTo(ax, ay - 3);
+          ctx.bezierCurveTo(ax + 3, ay, ax + 2, ay + 3, ax, ay + 4);
+          ctx.bezierCurveTo(ax - 2, ay + 3, ax - 3, ay, ax, ay - 3);
+          ctx.fill();
+          ctx.fillStyle = '#a9f5ff';
+          ctx.beginPath();
+          ctx.arc(ax - 5, ay - 7, 1.1, 0, Math.PI * 2);
+          ctx.arc(ax + 5, ay - 9, 0.9, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (wind) {
         ctx.fillStyle = '#bdf0ea';
         ctx.shadowColor = '#a2e8c9';
@@ -232,13 +252,20 @@ const Hud = {
         labelColor = '#8fc8e8';
         labelText = 'Sui — Amuleto da Água';
       } else if (ka) {
-        labelColor = '#e8a878';
-        labelText = 'Ka — Amuleto de Fogo';
+        labelColor = ancestralKa ? '#85dcff' : '#e8a878';
+        labelText = ancestralKa
+          ? 'Ka Ancestral — Amuleto de Fogo Ancestral'
+          : 'Ka — Amuleto de Fogo';
       }
       ctx.fillStyle = labelColor;
-      ctx.font = '9px "Segoe UI", sans-serif';
-      ctx.fillText(labelText, 274, 69);
-      if ((Game.amulets.sui && Game.amulets.ka) || Game.amulets.wind) {
+      ctx.font = ancestralKa ? '600 8.5px "Segoe UI", sans-serif' : '9px "Segoe UI", sans-serif';
+      ctx.fillText(labelText, 274, ancestralKa ? 64 : 69);
+      const canSwapAmulet = (Game.amulets.sui && Game.amulets.ka) || Game.amulets.wind;
+      if (ancestralKa) {
+        ctx.fillStyle = '#718eae';
+        ctx.font = '8px "Segoe UI", sans-serif';
+        ctx.fillText(`Incinerar: golpes marcam${canSwapAmulet ? ' · E trocar' : ''}`, 274, 76);
+      } else if (canSwapAmulet) {
         ctx.fillStyle = '#7386a8';
         ctx.fillText('· E trocar', 380, 69);
       }
@@ -268,6 +295,7 @@ const Hud = {
       ctx.fillText('Q trocar', 282, 106);
     }
     ctx.restore();
+    if (window.WindKingdom && World.current === 'vento') WindKingdom.drawHud(ctx);
     this.drawOverlays(ctx);
   },
 

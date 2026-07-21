@@ -54,7 +54,9 @@ const Lighting = {
    */
   getAmbientColor(pal) {
     if (World.current === 'fogo') {
-      return 'rgba(16, 5, 6, 0.52)'; // Penumbra quente mais clara (charcoal vulcânico)
+      const t = window.AshValley && Game.player ? AshValley.transitionAt(Game.player.y) : 0;
+      const color = U.mixRGB([16, 5, 6], [3, 8, 20], t);
+      return U.rgb(color, 0.52 + t * 0.05);
     }
     // Se o jogador estiver nas profundezas subaquáticas
     if (Game.player && Game.player.y > 1450) {
@@ -113,8 +115,11 @@ const Lighting = {
     // B. Luz dos Inimigos ativos
     for (const e of Enemies.list) {
       if (e.map === World.current && !e.dead) {
-        const eLightRadius = e.isBoss ? 170 : 65 + Math.sin(frames * 0.06 + e.x) * 4;
-        this.drawCutout(e.x - cam.x, e.y - cam.y - e.h / 2, eLightRadius, e.isBoss ? 0.85 : 0.75);
+        const blueFire = e.lightKind === 'blueFire';
+        const baseRadius = blueFire ? (e.isBoss ? 115 : 55) : (e.isBoss ? 170 : 65);
+        const eLightRadius = baseRadius + Math.sin(frames * 0.06 + e.x) * (blueFire ? 3 : 4);
+        const intensity = blueFire ? (e.isBoss ? 0.82 : 0.72) : (e.isBoss ? 0.85 : 0.75);
+        this.drawCutout(e.x - cam.x, e.y - cam.y - e.h / 2, eLightRadius, intensity);
       }
     }
 
@@ -135,6 +140,18 @@ const Lighting = {
       if (tx > -60 && tx < 1020) {
         const tRadius = 85 + Math.sin(frames * 0.12 + tc.x) * 4;
         this.drawCutout(tx, ty, tRadius, 0.9);
+      }
+    }
+
+    // Fogo espiritual do Vale dos Ossos participa da mesma máscara de luz.
+    if (World.current === 'fogo' && window.AshValley) {
+      for (const bf of AshValley.blueFires) {
+        const center = AshValley.blueFireCenter(bf);
+        const bx = center.x - cam.x, by = center.y - cam.y;
+        if (bx > -120 && bx < 1080 && by > -120 && by < 660) {
+          const radius = AshValley.blueFireLightRadius(bf) + Math.sin(frames * 0.09 + bf.x) * 4;
+          this.drawCutout(bx, by, radius, 0.82);
+        }
       }
     }
 
@@ -165,10 +182,10 @@ const Lighting = {
       const pfx = World.firePortal.floresta.x - cam.x, pfy = World.firePortal.floresta.y - cam.y - 52;
       this.drawCutout(pfx, pfy, 90, 0.8);
       const pwx = World.windPortal.x - cam.x, pwy = World.windPortal.y - cam.y - 52;
-      this.drawCutout(pwx, pwy, 60, 0.35);
+      this.drawCutout(pwx, pwy, 90, 0.8);
       const pax = World.portal.x - cam.x, pay = World.portal.y - cam.y - 64;
-      this.drawCutout(pax, pay, 120, Game.bossDefeated ? 0.9 : 0.4);
-    } else {
+      this.drawCutout(pax, pay, 120, Game.essences >= 3 ? 0.9 : 0.4);
+    } else if (World.current === 'fogo') {
       const pfx = World.firePortal.fogo.x - cam.x, pfy = World.firePortal.fogo.y - cam.y - 52;
       this.drawCutout(pfx, pfy, 90, 0.8);
     }
@@ -188,7 +205,7 @@ const Lighting = {
 
     // J. Katana da Escuridão
     const dk = World.darkKatana;
-    if (!dk.taken) {
+    if (World.current === 'floresta' && !dk.taken) {
       const kx = dk.x - cam.x, ky = dk.y - cam.y - 30;
       this.drawCutout(kx, ky, 80, 0.7);
     }
@@ -259,15 +276,18 @@ const Lighting = {
     // Glow do jogador (Dourado se Luz, Violeta se Corrompido)
     if (p) {
       const isDark = Game.wielded === 'dark';
-      const col = isDark ? 'rgba(150, 95, 255, 0.18)' : 'rgba(255, 214, 130, 0.18)';
-      drawGlow(p.x - cam.x, p.y - cam.y + pyOffset, pLightRadius * 0.95, col);
+      const col = isDark ? 'rgba(150, 95, 255, 0.10)' : 'rgba(255, 214, 130, 0.10)';
+      drawGlow(p.x - cam.x, p.y - cam.y + pyOffset, pLightRadius * 0.75, col);
     }
 
     // Glow dos inimigos
     for (const e of Enemies.list) {
       if (e.map === World.current && !e.dead) {
-        const rad = e.isBoss ? 150 : 60;
-        const col = e.element === 'fogo' ? 'rgba(255, 110, 30, 0.18)' : 'rgba(100, 220, 255, 0.16)';
+        const blueFire = e.lightKind === 'blueFire';
+        const rad = blueFire ? (e.isBoss ? 115 : 55) : (e.isBoss ? 150 : 60);
+        const col = blueFire
+          ? (e.isBoss ? 'rgba(55, 155, 255, 0.24)' : 'rgba(70, 180, 255, 0.20)')
+          : e.element === 'fogo' ? 'rgba(255, 110, 30, 0.18)' : 'rgba(100, 220, 255, 0.16)';
         drawGlow(e.x - cam.x, e.y - cam.y - e.h / 2, rad, col);
       }
     }
@@ -287,6 +307,17 @@ const Lighting = {
       const tx = tc.x - cam.x, ty = tc.y - cam.y - 34;
       if (tx > -60 && tx < 1020) {
         drawGlow(tx, ty, 80, 'rgba(255, 100, 30, 0.24)');
+      }
+    }
+
+
+    if (World.current === 'fogo' && window.AshValley) {
+      for (const bf of AshValley.blueFires) {
+        const center = AshValley.blueFireCenter(bf);
+        const bx = center.x - cam.x, by = center.y - cam.y;
+        if (bx > -120 && bx < 1080 && by > -120 && by < 660) {
+          drawGlow(bx, by, AshValley.blueFireLightRadius(bf) * 1.08, 'rgba(55,155,255,0.25)');
+        }
       }
     }
 

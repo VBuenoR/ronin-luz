@@ -484,7 +484,7 @@ const LakeSerpentSystem = {
     const hp = Number.isFinite(player.hp) ? player.hp : 1;
     const scale = 1 + (player.level - 1) * 0.15;
     const currentDamage = Math.round(this.DAMAGE * scale);
-    player.hp = Math.max(0, hp - currentDamage);
+    if (!Game.developerMode) player.hp = Math.max(0, hp - currentDamage);
     player.invuln = Math.max(player.invuln || 0, 75);
     player.vx = this.dirX * 5.2;
     player.vy = this.dirY * 3.8 - 1.2;
@@ -501,7 +501,7 @@ const LakeSerpentSystem = {
     const hp = Number.isFinite(player.hp) ? player.hp : 1;
     const scale = 1 + (player.level - 1) * 0.15;
     const currentDamage = Math.round(this.DAMAGE * scale);
-    player.hp = Math.max(0, hp - currentDamage);
+    if (!Game.developerMode) player.hp = Math.max(0, hp - currentDamage);
     player.invuln = Math.max(player.invuln || 0, 75);
     
     // Knockback em direção oposta ao nó

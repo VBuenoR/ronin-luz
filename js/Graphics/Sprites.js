@@ -409,12 +409,419 @@ function drawFireSamurai(ctx, x, y, s, tier, o = {}) {
   drawElementalSamurai(ctx, x, y, s, tier, o, true);
 }
 
+// ─── Espíritos do Reino do Vento (batalha) ─────────────────────────
+
+function drawWindClaimAura(ctx, x, y, t, amount, color) {
+  if (!(amount > 0)) return;
+  const pulse = 0.55 + 0.25 * Math.sin(t * 0.18);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = `rgba(${color || '255,216,120'},${amount * pulse})`;
+  ctx.lineWidth = 1.8;
+  ctx.shadowColor = `rgba(${color || '255,216,120'},0.9)`;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.ellipse(x, y, 29 + Math.sin(t * 0.13) * 2, 35 + Math.cos(t * 0.11) * 2, 0, 0, 7);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Pássaro-samurai de batalha. Tier 8 é claro e elegante; tier 13 recebe
+ * capa, coroa e correntes orbitais para manter uma silhueta régia própria.
+ */
+function drawWindBattleSprite(ctx, x, y, s, tier, o = {}) {
+  const t = o.t || 0;
+  const pose = o.pose || 'idle';
+  const facing = o.facing || 1;
+  const alpha = o.alpha === undefined ? 1 : o.alpha;
+  if (alpha <= 0) return;
+
+  const king = tier === 13;
+  const stormPhase = king && !!o.stormPhase;
+  const hover = Math.sin(t * 0.075) * 2.4 - (king ? 10 : 13);
+  const hurtLean = pose === 'hurt' ? -0.22 : 0;
+  const attackLean = pose === 'attack' ? 0.18 : 0;
+  const cx = (hurtLean + attackLean) * 18;
+  const cy = hover - 30;
+  const wingOpen = pose === 'attack' || pose === 'magic' || pose === 'charge'
+    ? 1 : pose === 'defend' ? 0.14 : 0.46 + Math.sin(t * 0.11) * 0.08;
+  const featherLight = king ? (stormPhase ? '#8995aa' : '#b7c2c7') : '#e8f2f1';
+  const featherMid = king ? '#455064' : '#94bbca';
+  const featherDark = king ? '#1d2534' : '#36566a';
+  const armor = king ? '#202834' : '#253d4b';
+  const armorEdge = king ? '#9a8046' : '#88afba';
+  const eye = stormPhase ? '#a8efff' : king ? '#e7bd62' : '#bdf7ff';
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s * facing, s);
+  ctx.globalAlpha = alpha;
+  drawWindClaimAura(ctx, cx, cy, t, o.aura, o.auraCol);
+
+  // O Rei carrega dois anéis de vento opostos; eles também anunciam a fase 2.
+  if (king) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let ring = 0; ring < 2; ring++) {
+      const a = t * (stormPhase ? 0.11 : 0.055) * (ring ? -1 : 1) + ring * Math.PI;
+      const ox = Math.cos(a) * (31 + ring * 4);
+      const oy = cy + Math.sin(a) * (13 + ring * 3);
+      ctx.strokeStyle = stormPhase ? 'rgba(166,231,255,0.62)' : 'rgba(214,239,230,0.42)';
+      ctx.lineWidth = stormPhase ? 1.7 : 1.2;
+      ctx.beginPath();
+      ctx.ellipse(cx + ox * 0.12, oy, 34 + ring * 5, 12 + ring * 2, a * 0.16, 0.25, 5.85);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Capa rasgada, sempre atrás das asas e do corpo.
+  if (king) {
+    const capeWave = Math.sin(t * 0.12) * 5;
+    ctx.fillStyle = stormPhase ? 'rgba(18,25,42,0.92)' : 'rgba(48,57,69,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(cx - 10, cy - 8);
+    ctx.bezierCurveTo(cx - 32, cy + 2, cx - 38 + capeWave, cy + 25, cx - 29 + capeWave, cy + 43);
+    ctx.lineTo(cx - 17 + capeWave * 0.4, cy + 35);
+    ctx.lineTo(cx - 8 + capeWave * 0.25, cy + 46);
+    ctx.lineTo(cx + 4, cy + 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(154,128,70,0.52)';
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+  }
+
+  // Cauda longa de garça/corvo: três lâminas de pena dão leitura vertical.
+  for (let tail = -1; tail <= 1; tail++) {
+    const sway = Math.sin(t * 0.09 + tail) * 2;
+    ctx.fillStyle = tail === 0 ? featherLight : featherMid;
+    ctx.beginPath();
+    ctx.moveTo(cx + tail * 5, cy + 13);
+    ctx.quadraticCurveTo(cx + tail * 9 + sway, cy + 34, cx + tail * 13 + sway, cy + 48 + Math.abs(tail) * 4);
+    ctx.quadraticCurveTo(cx + tail * 2, cy + 38, cx + tail * 2, cy + 13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = featherDark;
+    ctx.lineWidth = 0.75;
+    ctx.stroke();
+  }
+
+  // Asas segmentadas. Ataque/magia abre a silhueta; defesa as fecha à frente.
+  for (const side of [-1, 1]) {
+    const shoulderX = cx + side * 9;
+    const reach = 17 + wingOpen * (king ? 27 : 23);
+    const lift = wingOpen * (king ? 22 : 18);
+    const fold = pose === 'defend' ? 14 : 0;
+    ctx.fillStyle = side < 0 ? featherMid : featherLight;
+    ctx.strokeStyle = featherDark;
+    ctx.lineWidth = 1.05;
+    ctx.beginPath();
+    ctx.moveTo(shoulderX, cy - 6);
+    ctx.quadraticCurveTo(cx + side * (18 + fold), cy - 16 - lift,
+      cx + side * reach, cy - 12 - lift * 0.45);
+    ctx.quadraticCurveTo(cx + side * (reach - 5), cy + 2,
+      cx + side * (12 + fold), cy + 15);
+    ctx.quadraticCurveTo(cx + side * 6, cy + 6, shoulderX, cy - 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.strokeStyle = king ? 'rgba(31,41,58,0.8)' : 'rgba(76,117,138,0.72)';
+    ctx.lineWidth = 0.8;
+    for (let feather = 0; feather < 4; feather++) {
+      const k = (feather + 1) / 5;
+      ctx.beginPath();
+      ctx.moveTo(shoulderX, cy - 3 + feather * 3);
+      ctx.lineTo(cx + side * (12 + reach * k * 0.62), cy - 10 - lift * (1 - k) + feather * 3);
+      ctx.stroke();
+    }
+  }
+
+  // Pernas finas e garras mantêm o parentesco com a garça.
+  ctx.strokeStyle = king ? '#947a43' : '#7f9ca6';
+  ctx.lineWidth = 1.4;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + side * 5, cy + 13);
+    ctx.lineTo(cx + side * 6, cy + 27);
+    ctx.lineTo(cx + side * 11, cy + 30);
+    ctx.stroke();
+  }
+
+  // Peito emplumado e armadura leve sobreposta.
+  const body = ctx.createLinearGradient(cx, cy - 19, cx, cy + 19);
+  body.addColorStop(0, featherLight);
+  body.addColorStop(0.55, featherMid);
+  body.addColorStop(1, featherDark);
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, king ? 13 : 11, king ? 21 : 19, pose === 'hurt' ? -0.16 : 0, 0, 7);
+  ctx.fill();
+  ctx.strokeStyle = featherDark;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.fillStyle = armor;
+  ctx.strokeStyle = armorEdge;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - 12, cy - 5);
+  ctx.lineTo(cx + 12, cy - 5);
+  ctx.lineTo(cx + 9, cy + 12);
+  ctx.lineTo(cx, cy + 17);
+  ctx.lineTo(cx - 9, cy + 12);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  for (let plate = -1; plate <= 1; plate++) {
+    ctx.strokeStyle = 'rgba(185,209,211,0.42)';
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, cy + plate * 5 + 2);
+    ctx.lineTo(cx + 8, cy + plate * 5 + 2);
+    ctx.stroke();
+  }
+
+  // Pescoço alto, cabeça de falcão e bico comprido.
+  ctx.fillStyle = featherLight;
+  ctx.beginPath();
+  ctx.ellipse(cx + 3, cy - 22, king ? 10 : 9, king ? 11 : 10, -0.15, 0, 7);
+  ctx.fill();
+  ctx.strokeStyle = featherDark;
+  ctx.stroke();
+  ctx.fillStyle = king ? '#9b7d3f' : '#8aaeb9';
+  ctx.beginPath();
+  ctx.moveTo(cx + 10, cy - 25);
+  ctx.lineTo(cx + (king ? 29 : 25), cy - 21);
+  ctx.lineTo(cx + 10, cy - 18);
+  ctx.closePath();
+  ctx.fill();
+
+  // Kabuto aerodinâmico; no Rei, o penacho vira uma coroa quebrada.
+  ctx.fillStyle = armor;
+  ctx.strokeStyle = armorEdge;
+  ctx.beginPath();
+  ctx.moveTo(cx - 7, cy - 27);
+  ctx.quadraticCurveTo(cx + 2, cy - 39, cx + 12, cy - 27);
+  ctx.lineTo(cx + 9, cy - 23);
+  ctx.lineTo(cx - 6, cy - 23);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  if (king) {
+    ctx.fillStyle = '#b3944e';
+    for (let spike = -1; spike <= 1; spike++) {
+      ctx.beginPath();
+      ctx.moveTo(cx + spike * 5 - 2, cy - 31);
+      ctx.lineTo(cx + spike * 6, cy - 45 - (spike === 0 ? 4 : 0));
+      ctx.lineTo(cx + spike * 5 + 3, cy - 31);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = eye;
+  ctx.shadowColor = eye;
+  ctx.shadowBlur = stormPhase ? 11 : 6;
+  ctx.beginPath();
+  ctx.ellipse(cx + 7, cy - 24, stormPhase ? 2.4 : 1.8, 1.2, -0.1, 0, 7);
+  ctx.fill();
+  ctx.restore();
+
+  // Katana constituída pelo próprio fluxo de ar.
+  const arm = o.armT === undefined ? 0.75 : o.armT;
+  let handX = cx + 10, handY = cy + 3;
+  let bladeX = cx + 31, bladeY = cy + 13;
+  if (pose === 'attack') { bladeX = cx + 43 + arm * 7; bladeY = cy - 13 + arm * 7; }
+  if (pose === 'defend') { handX = cx + 5; bladeX = cx + 5; bladeY = cy - 35; }
+  if (pose === 'magic' || pose === 'charge') { bladeX = cx + 20; bladeY = cy - 35; }
+  ctx.strokeStyle = '#7a6944';
+  ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(cx + 4, cy + 5); ctx.lineTo(handX, handY); ctx.stroke();
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = stormPhase ? 'rgba(166,235,255,0.96)' : 'rgba(219,250,246,0.92)';
+  ctx.lineWidth = king ? 2.8 : 2.2;
+  ctx.shadowColor = stormPhase ? '#8edfff' : '#bfeee5';
+  ctx.shadowBlur = 7;
+  ctx.beginPath();
+  ctx.moveTo(handX, handY);
+  ctx.quadraticCurveTo((handX + bladeX) * 0.5 + 4, (handY + bladeY) * 0.5 - 5, bladeX, bladeY);
+  ctx.stroke();
+  ctx.lineWidth = 0.8;
+  for (let spiral = 1; spiral <= 3; spiral++) {
+    const k = spiral / 4;
+    const bx = U.lerp(handX, bladeX, k);
+    const by = U.lerp(handY, bladeY, k);
+    ctx.beginPath();
+    ctx.arc(bx, by, 2.2 + spiral * 0.45, t * 0.12 + spiral, t * 0.12 + spiral + Math.PI * 1.3);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  if (pose === 'magic' || pose === 'charge') {
+    const charge = pose === 'charge' ? 0.72 + Math.sin(t * 0.22) * 0.16 : 0.48;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(cx + 20, cy - 40, 1, cx + 20, cy - 40, 18);
+    g.addColorStop(0, `rgba(240,255,249,${charge})`);
+    g.addColorStop(0.45, `rgba(143,224,235,${charge * 0.55})`);
+    g.addColorStop(1, 'rgba(143,224,235,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx + 20, cy - 40, 18, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
+  if (o.flash > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = Math.min(1, o.flash) * alpha;
+    ctx.fillStyle = 'rgba(255,255,255,0.78)';
+    ctx.beginPath(); ctx.ellipse(cx, cy - 3, king ? 24 : 20, king ? 39 : 34, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 
 // ─── O Rōnin de Luz (Jogador) ──────────────────────────────────────────
 
 /**
  * Desenha o samurai de luz. (x,y) = pés. Usado no mapa e na batalha.
  */
+/** Corpo de nuvens sem anatomia fixa, exclusivo do Espírito da Tempestade. */
+function drawStormBattleSprite(ctx, x, y, s, tier, o = {}) {
+  const t = o.t || 0;
+  const pose = o.pose || 'idle';
+  const facing = o.facing || 1;
+  const alpha = o.alpha === undefined ? 1 : o.alpha;
+  if (alpha <= 0) return;
+  const hover = Math.sin(t * 0.085) * 3 - 19;
+  const cx = pose === 'attack' ? 6 : pose === 'hurt' ? -5 : 0;
+  const cy = hover - 27;
+  const compressed = pose === 'defend' ? 0.82 : pose === 'charge' ? 1.08 : 1;
+  const pulse = 0.5 + 0.5 * Math.sin(t * 0.17);
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s * facing, s);
+  ctx.globalAlpha = alpha;
+  drawWindClaimAura(ctx, cx, cy, t, o.aura, o.auraCol);
+
+  // Tentáculos inferiores tornam a silhueta diferente de qualquer samurai.
+  ctx.strokeStyle = 'rgba(38,55,78,0.9)';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  for (let tendril = -1; tendril <= 1; tendril++) {
+    const sway = Math.sin(t * 0.12 + tendril * 1.8) * 5;
+    ctx.beginPath();
+    ctx.moveTo(cx + tendril * 12, cy + 12);
+    ctx.quadraticCurveTo(cx + tendril * 18 + sway, cy + 26,
+      cx + tendril * 9 - sway * 0.4, cy + 38 + Math.abs(tendril) * 4);
+    ctx.stroke();
+  }
+
+  const body = ctx.createRadialGradient(cx - 8, cy - 12, 2, cx, cy, 36);
+  body.addColorStop(0, 'rgba(113,139,169,0.98)');
+  body.addColorStop(0.42, 'rgba(55,76,105,0.98)');
+  body.addColorStop(1, 'rgba(18,29,49,0.96)');
+  ctx.fillStyle = body;
+  ctx.strokeStyle = 'rgba(139,192,221,0.58)';
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.ellipse(cx - 21, cy + 1, 18, 13 * compressed, -0.18, 0, 7);
+  ctx.ellipse(cx - 8, cy - 12, 21, 18 * compressed, 0.08, 0, 7);
+  ctx.ellipse(cx + 11, cy - 9, 22, 19 * compressed, -0.06, 0, 7);
+  ctx.ellipse(cx + 25, cy + 3, 17, 13 * compressed, 0.14, 0, 7);
+  ctx.ellipse(cx + 2, cy + 9, 30, 15 * compressed, 0, 0, 7);
+  ctx.fill();
+  ctx.stroke();
+
+  // Núcleo azul pulsante, visível através da massa escura.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const core = ctx.createRadialGradient(cx + 3, cy, 1, cx + 3, cy, 18);
+  core.addColorStop(0, `rgba(234,253,255,${0.92 + pulse * 0.08})`);
+  core.addColorStop(0.28, `rgba(103,207,255,${0.68 + pulse * 0.18})`);
+  core.addColorStop(1, 'rgba(63,142,220,0)');
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.arc(cx + 3, cy, 18, 0, 7); ctx.fill();
+  ctx.fillStyle = '#ddfbff';
+  ctx.beginPath(); ctx.arc(cx + 3, cy, 3.4 + pulse * 1.2, 0, 7); ctx.fill();
+  ctx.restore();
+
+  // Veias elétricas internas; poucas linhas mantêm o pico de brilho legível.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = `rgba(175,235,255,${0.55 + pulse * 0.32})`;
+  ctx.shadowColor = '#82d8ff';
+  ctx.shadowBlur = 5;
+  ctx.lineWidth = 1.15;
+  for (let bolt = 0; bolt < 3; bolt++) {
+    const bx = cx - 19 + bolt * 17;
+    const by = cy - 14 + (bolt % 2) * 5;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(bx + 5, by + 7);
+    ctx.lineTo(bx + 1, by + 13);
+    ctx.lineTo(bx + 9, by + 20);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  if (pose === 'attack') {
+    ctx.strokeStyle = 'rgba(97,145,181,0.9)';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(cx + 20, cy);
+    ctx.quadraticCurveTo(cx + 35, cy - 10, cx + 45, cy + 3);
+    ctx.stroke();
+  } else if (pose === 'defend') {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(168,224,245,${0.48 + pulse * 0.22})`;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.ellipse(cx, cy, 37, 30, 0, 0, 7); ctx.stroke();
+    ctx.restore();
+  }
+
+  // A esfera cresce em charge e funciona como telegráfico da Paralisante.
+  if (pose === 'charge' || pose === 'magic') {
+    const orbRadius = pose === 'charge' ? 10 + pulse * 7 : 9 + pulse * 2;
+    const ox = cx + 25, oy = cy - 28;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const orb = ctx.createRadialGradient(ox, oy, 1, ox, oy, orbRadius * 1.8);
+    orb.addColorStop(0, 'rgba(255,255,255,0.98)');
+    orb.addColorStop(0.28, 'rgba(135,225,255,0.9)');
+    orb.addColorStop(1, 'rgba(66,130,225,0)');
+    ctx.fillStyle = orb;
+    ctx.beginPath(); ctx.arc(ox, oy, orbRadius * 1.8, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(205,248,255,0.9)';
+    ctx.lineWidth = 1.2;
+    for (let arc = 0; arc < 3; arc++) {
+      const a = t * 0.14 + arc * 2.1;
+      ctx.beginPath();
+      ctx.arc(ox, oy, orbRadius + arc * 2.3, a, a + 1.35);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (o.flash > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = Math.min(1, o.flash) * alpha;
+    ctx.fillStyle = 'rgba(255,255,255,0.82)';
+    ctx.beginPath(); ctx.ellipse(cx, cy, 39, 31, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function drawLightSamurai(ctx, x, y, s, o = {}) {
   const t = o.t || 0;
   const facing = o.facing || 1;
@@ -441,8 +848,8 @@ function drawLightSamurai(ctx, x, y, s, o = {}) {
     : U.mixRGB([255, 216, 130], [150, 95, 255], Math.max(cor, wieldDark ? 0.45 : 0));
   const auraCol = aur[0] + ',' + aur[1] + ',' + aur[2];
   // essência perdida → halo fraco e curto; espírito → halo amplo e dourado
-  const auraStrength = isSpirit ? 0.42 : isWeak ? 0.14 : 0.30;
-  const auraR = isSpirit ? 42 : 36;
+  const auraStrength = isSpirit ? 0.36 : isWeak ? 0.10 : 0.16;
+  const auraR = isSpirit ? 38 : 29;
   const glow = ctx.createRadialGradient(0, -22, 2, 0, -22, auraR);
   glow.addColorStop(0, `rgba(${auraCol},${auraStrength})`);
   glow.addColorStop(1, `rgba(${auraCol},0)`);
@@ -710,7 +1117,495 @@ function drawLightSamurai(ctx, x, y, s, o = {}) {
   ctx.restore();
 }
 
+// ─── Espíritos da Chama Ancestral (Vale dos Ossos) ──────────────────────────
+
+// Os despachantes antigos passam `(tier, options)`; os novos podem passar apenas
+// `options`. Aceitar as duas formas mantém estes sprites independentes da camada
+// de simulação e evita adaptações duplicadas no campo e na batalha.
+function resolveAshSpriteOptions(tierOrOptions, maybeOptions) {
+  if (tierOrOptions && typeof tierOrOptions === 'object') return tierOrOptions;
+  return maybeOptions && typeof maybeOptions === 'object' ? maybeOptions : {};
+}
+
+function drawAshBlueFlame(ctx, x, y, w, h, phase, alpha = 1) {
+  if (!(w > 0) || !(h > 0) || alpha <= 0) return;
+  const sway = Math.sin(phase) * w * 0.24;
+  const fork = Math.sin(phase * 1.73 + 0.8) * w * 0.14;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha *= alpha;
+  ctx.globalCompositeOperation = 'lighter';
+  const flame = ctx.createLinearGradient(0, 2, 0, -h);
+  flame.addColorStop(0, 'rgba(28,76,255,0.58)');
+  flame.addColorStop(0.5, 'rgba(56,178,255,0.94)');
+  flame.addColorStop(1, 'rgba(214,246,255,0.12)');
+  ctx.fillStyle = flame;
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.52, 1);
+  ctx.quadraticCurveTo(-w * 0.36 + sway * 0.24, -h * 0.48, sway, -h);
+  ctx.quadraticCurveTo(w * 0.12 + fork, -h * 0.58, w * 0.52, 1);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(225,249,255,0.58)';
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.16, 0);
+  ctx.quadraticCurveTo(sway * 0.18, -h * 0.42, sway * 0.42, -h * 0.68);
+  ctx.quadraticCurveTo(w * 0.2, -h * 0.36, w * 0.18, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawAshBoneLink(ctx, ax, ay, bx, by, width, bone, edge) {
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = width + 1.7;
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  ctx.strokeStyle = bone;
+  ctx.lineWidth = width;
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  ctx.fillStyle = bone;
+  ctx.beginPath(); ctx.arc(ax, ay, width * 0.56, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(bx, by, width * 0.56, 0, Math.PI * 2); ctx.fill();
+}
+
+/**
+ * Esqueleto coberto pelas chamas azuis do Vale dos Ossos.
+ * Assinaturas aceitas:
+ *   drawBlueFlameSkeleton(ctx, x, y, scale, options)
+ *   drawBlueFlameSkeleton(ctx, x, y, scale, tier, options)
+ */
+function drawBlueFlameSkeleton(ctx, x, y, s, tierOrOptions = {}, maybeOptions) {
+  const o = resolveAshSpriteOptions(tierOrOptions, maybeOptions);
+  const t = Number.isFinite(o.t) ? o.t : 0;
+  const pose = o.pose || 'idle';
+  const facing = o.facing || 1;
+  const alpha = o.alpha === undefined ? 1 : o.alpha;
+  if (alpha <= 0) return;
+
+  const walk = Math.sin(t * 0.24);
+  const pulse = 0.5 + 0.5 * Math.sin(t * 0.13);
+  const crouched = pose === 'crouch' || pose === 'cocoon';
+  const jumping = pose === 'jump';
+  const hurt = pose === 'hurt';
+  const charging = pose === 'charge';
+  const healing = pose === 'heal';
+  const victorious = pose === 'victory';
+  const bob = pose === 'idle' ? Math.sin(t * 0.09) * 0.8 : pose === 'walk' ? Math.abs(walk) * -0.7 : 0;
+  const lean = hurt ? -4.2 : jumping ? 2.3 : pose === 'attack' ? 2.8 : 0;
+  const squash = crouched ? 0.78 : jumping ? 0.94 : 1;
+
+  ctx.save();
+  ctx.translate(x, y + bob);
+  ctx.scale(s * facing, s);
+  ctx.globalAlpha = alpha;
+  ctx.translate(lean, 0);
+  ctx.scale(1, squash);
+
+  // Halo e chamas ficam atrás da ossatura para preservar a leitura da silhueta.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const aura = ctx.createRadialGradient(0, -27, 2, 0, -27, charging || healing ? 34 : 25);
+  aura.addColorStop(0, `rgba(65,183,255,${0.14 + pulse * 0.08})`);
+  aura.addColorStop(1, 'rgba(28,106,255,0)');
+  ctx.fillStyle = aura;
+  ctx.beginPath(); ctx.ellipse(0, -27, charging || healing ? 34 : 25, charging || healing ? 39 : 31, 0, 0, Math.PI * 2); ctx.fill();
+  if (o.aura > 0) {
+    ctx.strokeStyle = `rgba(112,207,255,${Math.min(0.72, o.aura * (0.42 + pulse * 0.18))})`;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.ellipse(0, -27, 21 + pulse * 2, 29 + pulse * 2, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+
+  const flameH = charging ? 20 : healing ? 18 : victorious ? 17 : 12;
+  drawAshBlueFlame(ctx, -8, -12, 10, flameH, t * 0.18 + 0.2, 0.78);
+  drawAshBlueFlame(ctx, 8, -12, 10, flameH * 0.92, t * 0.2 + 2.1, 0.74);
+  drawAshBlueFlame(ctx, -11, -29, 9, flameH * 0.84, t * 0.23 + 1.2, 0.76);
+  drawAshBlueFlame(ctx, 11, -29, 9, flameH * 0.9, t * 0.19 + 3.4, 0.74);
+  drawAshBlueFlame(ctx, 0, -40, 13, flameH * 1.1, t * 0.21 + 4.2, 0.86);
+
+  const bone = hurt ? '#eefaff' : '#cbd9df';
+  const boneHi = '#eff8f5';
+  const edge = '#586d7d';
+  const pelvisY = -16;
+  const chestY = -30;
+  const stride = pose === 'walk' ? walk * 5.2 : 0;
+
+  // Pernas segmentadas; em salto elas se recolhem e, na vitória, firmam a base.
+  let kneeL = { x: -5 - stride * 0.35, y: -8 };
+  let footL = { x: -7 - stride, y: 0 };
+  let kneeR = { x: 5 + stride * 0.35, y: -8 };
+  let footR = { x: 7 + stride, y: 0 };
+  if (jumping) {
+    kneeL = { x: -9, y: -8 }; footL = { x: -4, y: -4 };
+    kneeR = { x: 9, y: -7 }; footR = { x: 13, y: -3 };
+  } else if (crouched) {
+    kneeL = { x: -9, y: -7 }; footL = { x: -13, y: 0 };
+    kneeR = { x: 9, y: -7 }; footR = { x: 13, y: 0 };
+  }
+  drawAshBoneLink(ctx, -4, pelvisY, kneeL.x, kneeL.y, 2.6, bone, edge);
+  drawAshBoneLink(ctx, kneeL.x, kneeL.y, footL.x, footL.y, 2.4, bone, edge);
+  drawAshBoneLink(ctx, 4, pelvisY, kneeR.x, kneeR.y, 2.6, bone, edge);
+  drawAshBoneLink(ctx, kneeR.x, kneeR.y, footR.x, footR.y, 2.4, bone, edge);
+
+  // Pelve e coluna.
+  ctx.fillStyle = edge;
+  ctx.beginPath(); ctx.ellipse(0, pelvisY, 8.5, 4.8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = bone;
+  ctx.beginPath();
+  ctx.moveTo(-7, pelvisY - 2); ctx.quadraticCurveTo(-4, pelvisY + 5, 0, pelvisY + 2);
+  ctx.quadraticCurveTo(4, pelvisY + 5, 7, pelvisY - 2);
+  ctx.lineTo(4, pelvisY - 5); ctx.quadraticCurveTo(0, pelvisY - 2, -4, pelvisY - 5); ctx.closePath(); ctx.fill();
+  drawAshBoneLink(ctx, 0, pelvisY - 3, 0, chestY + 6, 2.5, bone, edge);
+
+  // Caixa torácica aberta: os arcos claros diferenciam o inimigo das chamas do cenário.
+  ctx.strokeStyle = edge; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
+  for (let i = 0; i < 4; i++) {
+    const ry = chestY - 5 + i * 4;
+    const rw = 10.5 - i * 1.1;
+    ctx.beginPath(); ctx.moveTo(0, ry); ctx.quadraticCurveTo(-rw, ry - 1, -rw + 1.5, ry + 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, ry); ctx.quadraticCurveTo(rw, ry - 1, rw - 1.5, ry + 5); ctx.stroke();
+  }
+  ctx.strokeStyle = boneHi; ctx.lineWidth = 1.9;
+  for (let i = 0; i < 4; i++) {
+    const ry = chestY - 5 + i * 4;
+    const rw = 10.5 - i * 1.1;
+    ctx.beginPath(); ctx.moveTo(0, ry); ctx.quadraticCurveTo(-rw, ry - 1, -rw + 1.5, ry + 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, ry); ctx.quadraticCurveTo(rw, ry - 1, rw - 1.5, ry + 5); ctx.stroke();
+  }
+
+  // Braços mudam de forma por pose; o lado positivo sempre encara o jogador.
+  let elbowL = { x: -15, y: -27 }, handL = { x: -13, y: -18 };
+  let elbowR = { x: 15, y: -27 }, handR = { x: 14, y: -18 };
+  if (pose === 'walk') {
+    elbowL.x -= walk * 2; handL.x -= walk * 4;
+    elbowR.x += walk * 2; handR.x += walk * 4;
+  } else if (pose === 'attack') {
+    elbowR = { x: 18, y: -30 }; handR = { x: 29, y: -29 };
+    elbowL = { x: -12, y: -25 }; handL = { x: -4, y: -20 };
+  } else if (pose === 'magic' || charging || healing) {
+    elbowL = { x: -16, y: -35 }; handL = { x: -9, y: -42 };
+    elbowR = { x: 16, y: -35 }; handR = { x: 9, y: -42 };
+  } else if (pose === 'defend' || pose === 'cocoon') {
+    elbowL = { x: -14, y: -31 }; handL = { x: 6, y: -25 };
+    elbowR = { x: 14, y: -31 }; handR = { x: -6, y: -25 };
+  } else if (jumping) {
+    elbowL = { x: -14, y: -37 }; handL = { x: -18, y: -31 };
+    elbowR = { x: 14, y: -37 }; handR = { x: 20, y: -34 };
+  } else if (victorious) {
+    elbowL = { x: -15, y: -39 }; handL = { x: -11, y: -49 };
+    elbowR = { x: 15, y: -39 }; handR = { x: 11, y: -49 };
+  }
+  drawAshBoneLink(ctx, -8, chestY - 4, elbowL.x, elbowL.y, 2.4, bone, edge);
+  drawAshBoneLink(ctx, elbowL.x, elbowL.y, handL.x, handL.y, 2.2, bone, edge);
+  drawAshBoneLink(ctx, 8, chestY - 4, elbowR.x, elbowR.y, 2.4, bone, edge);
+  drawAshBoneLink(ctx, elbowR.x, elbowR.y, handR.x, handR.y, 2.2, bone, edge);
+
+  // Crânio de calcário, com cavidades escuras e centelhas azuis internas.
+  const skullY = -45;
+  ctx.fillStyle = edge;
+  ctx.beginPath(); ctx.ellipse(0, skullY, 10.6, 10.2, 0, 0, Math.PI * 2); ctx.fill();
+  const skull = ctx.createLinearGradient(-6, skullY - 8, 7, skullY + 7);
+  skull.addColorStop(0, boneHi); skull.addColorStop(1, bone);
+  ctx.fillStyle = skull;
+  ctx.beginPath();
+  ctx.moveTo(-8.5, skullY - 5);
+  ctx.quadraticCurveTo(-5, skullY - 12, 2, skullY - 10);
+  ctx.quadraticCurveTo(10, skullY - 8, 9, skullY);
+  ctx.lineTo(6, skullY + 8); ctx.lineTo(1.8, skullY + 6);
+  ctx.lineTo(0, skullY + 10); ctx.lineTo(-2.2, skullY + 6);
+  ctx.lineTo(-7, skullY + 7); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#07111e';
+  ctx.beginPath(); ctx.ellipse(-3.5, skullY - 1.5, 2.7, 3.1, -0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(3.8, skullY - 1.5, 2.7, 3.1, 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, skullY + 1); ctx.lineTo(-1.7, skullY + 4); ctx.lineTo(1.7, skullY + 4); ctx.closePath(); ctx.fill();
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = `rgba(150,224,255,${0.64 + pulse * 0.32})`;
+  ctx.shadowColor = '#64c8ff'; ctx.shadowBlur = 5;
+  ctx.beginPath(); ctx.arc(-3.5, skullY - 1.5, 0.9, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(3.8, skullY - 1.5, 0.9, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  if (pose === 'attack') {
+    // Costela destacada em pleno ar, com uma cauda curta de chama ancestral.
+    ctx.strokeStyle = edge; ctx.lineWidth = 3.8;
+    ctx.beginPath(); ctx.arc(33, -29, 7, -1.2, 1.15); ctx.stroke();
+    ctx.strokeStyle = boneHi; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(33, -29, 7, -1.2, 1.15); ctx.stroke();
+    drawAshBlueFlame(ctx, 26, -27, 7, 12, t * 0.3, 0.9);
+  }
+
+  if (pose === 'magic' || charging) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const orbY = -43;
+    const orbR = charging ? 4.4 + pulse * 2.2 : 4.2 + pulse;
+    const orb = ctx.createRadialGradient(0, orbY, 0, 0, orbY, orbR * 2.7);
+    orb.addColorStop(0, 'rgba(238,253,255,0.98)');
+    orb.addColorStop(0.35, 'rgba(73,193,255,0.86)');
+    orb.addColorStop(1, 'rgba(20,82,255,0)');
+    ctx.fillStyle = orb; ctx.beginPath(); ctx.arc(0, orbY, orbR * 2.7, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  if (pose === 'defend' || pose === 'cocoon') {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(221,240,244,0.86)';
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath(); ctx.arc(1, -27, 14 + i * 2.5, -1.35, 1.35); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (healing || pose === 'cocoon') {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const count = pose === 'cocoon' ? 8 : 6;
+    for (let i = 0; i < count; i++) {
+      const a = i / count * Math.PI * 2 + t * 0.035;
+      const travel = ((t * 0.025 + i * 0.17) % 1);
+      const radius = 30 * (1 - travel) + 7;
+      ctx.fillStyle = `rgba(128,215,255,${0.32 + travel * 0.5})`;
+      ctx.beginPath(); ctx.arc(Math.cos(a) * radius, -27 + Math.sin(a) * radius * 0.72, 1.1 + travel, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  if (victorious || o.extraLife > 0) {
+    drawAshBlueFlame(ctx, -5, skullY - 8, 8, 14 + pulse * 4, t * 0.24, 0.9);
+    drawAshBlueFlame(ctx, 5, skullY - 8, 8, 15 + (1 - pulse) * 4, t * 0.21 + 2, 0.9);
+  }
+
+  if (o.flash > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = Math.min(1, o.flash) * alpha;
+    ctx.fillStyle = 'rgba(231,250,255,0.78)';
+    ctx.beginPath(); ctx.ellipse(0, -28, 15, 27, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawAshRockPolygon(ctx, points, fill, stroke = '#34475b', lineWidth = 1.15) {
+  if (!points || points.length < 3) return;
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+  ctx.closePath();
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.strokeStyle = stroke; ctx.lineWidth = lineWidth; ctx.stroke();
+}
+
+/**
+ * Golem de rocha vulcânica e chama ancestral. A geometria-base é compacta
+ * para funcionar com as escalas de chefe já usadas no campo e na batalha.
+ */
+function drawAncientFlameGolem(ctx, x, y, s, tierOrOptions = {}, maybeOptions) {
+  const o = resolveAshSpriteOptions(tierOrOptions, maybeOptions);
+  const t = Number.isFinite(o.t) ? o.t : 0;
+  const pose = o.pose || 'idle';
+  const facing = o.facing || 1;
+  const alpha = o.alpha === undefined ? 1 : o.alpha;
+  if (alpha <= 0) return;
+
+  const pulse = 0.5 + 0.5 * Math.sin(t * 0.11);
+  const step = Math.sin(t * 0.17);
+  const cocoon = pose === 'cocoon' || pose === 'heal';
+  const charging = pose === 'charge';
+  const casting = pose === 'magic';
+  const hurt = pose === 'hurt';
+  const crouched = pose === 'crouch' || cocoon;
+  const jumping = pose === 'jump';
+  const victorious = pose === 'victory';
+  const chargeProgress = Number.isFinite(o.chargeProgress)
+    ? U.clamp(o.chargeProgress, 0, 1)
+    : charging ? 0.55 + pulse * 0.45 : casting ? 1 : 0.16;
+  const bodyLift = pose === 'idle' ? Math.sin(t * 0.065) * 0.45 : pose === 'walk' ? -Math.abs(step) * 0.5 : 0;
+  const lean = hurt ? -2.8 : pose === 'attack' ? 1.8 : jumping ? 1.4 : 0;
+  const squash = crouched ? 0.88 : jumping ? 0.94 : 1;
+
+  ctx.save();
+  ctx.translate(x, y + bodyLift);
+  ctx.scale(s * facing, s);
+  ctx.globalAlpha = alpha;
+  ctx.translate(lean, 0);
+  ctx.scale(1, squash);
+
+  // Presença azul contida: o centro ilumina, mas a rocha continua quase preta.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const auraRadius = cocoon ? 34 : charging || casting ? 38 : 29;
+  const aura = ctx.createRadialGradient(0, -27, 3, 0, -27, auraRadius);
+  aura.addColorStop(0, `rgba(58,169,255,${0.12 + pulse * 0.08})`);
+  aura.addColorStop(0.55, 'rgba(35,112,255,0.08)');
+  aura.addColorStop(1, 'rgba(18,68,210,0)');
+  ctx.fillStyle = aura;
+  ctx.beginPath(); ctx.ellipse(0, -27, auraRadius, auraRadius * 1.08, 0, 0, Math.PI * 2); ctx.fill();
+  if (o.aura > 0) {
+    ctx.strokeStyle = `rgba(104,205,255,${Math.min(0.68, o.aura * (0.36 + pulse * 0.18))})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(0, -27, 25 + pulse * 2, 31 + pulse * 2, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+
+  const ventH = victorious ? 22 : charging || casting ? 18 : cocoon ? 8 : 13;
+  drawAshBlueFlame(ctx, -13, -34, 9, ventH, t * 0.18 + 0.4, 0.8);
+  drawAshBlueFlame(ctx, 13, -34, 9, ventH * 0.92, t * 0.2 + 2.4, 0.8);
+  drawAshBlueFlame(ctx, 0, -44, 12, ventH * 1.15, t * 0.17 + 4, 0.86);
+
+  const rockDark = hurt ? '#202f40' : '#0b111b';
+  const rock = hurt ? '#34495c' : '#172230';
+  const rockHi = '#2a3a4b';
+  const edge = '#40566b';
+  const footShift = pose === 'walk' ? step * 2.2 : 0;
+
+  // Pés e pernas em blocos separados deixam o peso legível durante a marcha.
+  drawAshRockPolygon(ctx, [[-18, -13], [-7, -14], [-5, -2], [-9 + footShift, 1], [-22 + footShift, 0], [-23, -5]], rock, edge);
+  drawAshRockPolygon(ctx, [[7, -14], [18, -13], [23, -5], [22 - footShift, 0], [9 - footShift, 1], [5, -2]], rock, edge);
+  drawAshRockPolygon(ctx, [[-16, -24], [-5, -24], [-4, -11], [-18, -10], [-21, -17]], rockDark, edge);
+  drawAshRockPolygon(ctx, [[5, -24], [16, -24], [21, -17], [18, -10], [4, -11]], rockDark, edge);
+
+  const torsoGradient = ctx.createLinearGradient(-18, -44, 20, -15);
+  torsoGradient.addColorStop(0, rockHi);
+  torsoGradient.addColorStop(0.48, rock);
+  torsoGradient.addColorStop(1, rockDark);
+  drawAshRockPolygon(ctx, [[-21, -39], [-12, -48], [9, -49], [21, -39], [18, -19], [8, -14], [-10, -15], [-19, -21]], torsoGradient, edge, 1.35);
+
+  // Braços. O punho direito avança no golpe; no casulo ambos fecham o núcleo.
+  let lElbow = [-25, -29], lFist = [-25, -16];
+  let rElbow = [25, -29], rFist = [25, -16];
+  if (pose === 'walk') {
+    lFist = [-25 - step * 2, -17]; rFist = [25 + step * 2, -17];
+  } else if (pose === 'attack') {
+    rElbow = [28, -34]; rFist = [39, -31]; lFist = [-18, -17];
+  } else if (pose === 'defend') {
+    lElbow = [-24, -34]; lFist = [4, -27]; rElbow = [24, -34]; rFist = [-4, -27];
+  } else if (charging || casting) {
+    lElbow = [-27, -38]; lFist = [-14, -45]; rElbow = [27, -38]; rFist = [14, -45];
+  } else if (cocoon) {
+    lElbow = [-21, -34]; lFist = [-6, -27]; rElbow = [21, -34]; rFist = [6, -27];
+  } else if (jumping) {
+    lElbow = [-26, -37]; lFist = [-30, -28]; rElbow = [26, -37]; rFist = [31, -30];
+  } else if (victorious) {
+    lElbow = [-27, -43]; lFist = [-22, -55]; rElbow = [27, -43]; rFist = [22, -55];
+  }
+  drawAshRockPolygon(ctx, [[-16, -42], [-25, -39], [lElbow[0] - 4, lElbow[1]], [lElbow[0] + 4, lElbow[1] + 3], [-11, -29]], rock, edge);
+  drawAshRockPolygon(ctx, [[lElbow[0] - 4, lElbow[1]], [lElbow[0] + 5, lElbow[1] + 1], [lFist[0] + 5, lFist[1] + 5], [lFist[0] - 5, lFist[1] + 5]], rockDark, edge);
+  drawAshRockPolygon(ctx, [[16, -42], [25, -39], [rElbow[0] + 4, rElbow[1]], [rElbow[0] - 4, rElbow[1] + 3], [11, -29]], rock, edge);
+  drawAshRockPolygon(ctx, [[rElbow[0] + 4, rElbow[1]], [rElbow[0] - 5, rElbow[1] + 1], [rFist[0] - 5, rFist[1] + 5], [rFist[0] + 5, rFist[1] + 5]], rockDark, edge);
+  drawAshRockPolygon(ctx, [[lFist[0] - 6, lFist[1] - 2], [lFist[0] + 5, lFist[1] - 3], [lFist[0] + 7, lFist[1] + 5], [lFist[0] - 5, lFist[1] + 7]], rockHi, edge);
+  drawAshRockPolygon(ctx, [[rFist[0] - 5, rFist[1] - 3], [rFist[0] + 6, rFist[1] - 2], [rFist[0] + 5, rFist[1] + 7], [rFist[0] - 7, rFist[1] + 5]], rockHi, edge);
+
+  // Cabeça baixa, sem pescoço, com mandíbula vulcânica.
+  drawAshRockPolygon(ctx, [[-14, -51], [-8, -57], [9, -57], [15, -50], [12, -38], [5, -35], [-8, -36], [-13, -41]], rock, edge, 1.35);
+  ctx.fillStyle = '#020812';
+  ctx.beginPath();
+  ctx.moveTo(-7, -47); ctx.quadraticCurveTo(0, -51 - chargeProgress * 2, 8, -47);
+  ctx.lineTo(6, -40); ctx.quadraticCurveTo(0, -37 + chargeProgress, -6, -40); ctx.closePath(); ctx.fill();
+
+  // Olhos e fornalha da boca compartilham o mesmo núcleo azul.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = `rgba(169,231,255,${0.62 + pulse * 0.28})`;
+  ctx.shadowColor = '#4db8ff'; ctx.shadowBlur = 4 + chargeProgress * 7;
+  ctx.beginPath(); ctx.arc(-5, -50, 1.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, -50, 1.15, 0, Math.PI * 2); ctx.fill();
+  const mouthR = 1.8 + chargeProgress * 3.2;
+  const mouth = ctx.createRadialGradient(0, -44, 0, 0, -44, mouthR * 2.7);
+  mouth.addColorStop(0, 'rgba(242,254,255,1)');
+  mouth.addColorStop(0.3, 'rgba(84,202,255,0.95)');
+  mouth.addColorStop(1, 'rgba(31,78,255,0)');
+  ctx.fillStyle = mouth; ctx.beginPath(); ctx.arc(0, -44, mouthR * 2.7, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  // Fissuras emissivas. Em cura/carga elas se alargam sem clarear toda a rocha.
+  const crackAlpha = cocoon || charging || casting ? 0.78 + pulse * 0.2 : 0.44 + pulse * 0.18;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = `rgba(83,190,255,${crackAlpha})`;
+  ctx.lineWidth = cocoon || charging ? 1.45 : 0.9;
+  ctx.shadowColor = 'rgba(44,137,255,0.82)'; ctx.shadowBlur = cocoon || charging ? 6 : 3;
+  ctx.beginPath();
+  ctx.moveTo(-4, -47); ctx.lineTo(-8, -38); ctx.lineTo(-3, -31); ctx.lineTo(-7, -22);
+  ctx.moveTo(7, -42); ctx.lineTo(3, -34); ctx.lineTo(8, -27); ctx.lineTo(4, -17);
+  ctx.moveTo(-15, -34); ctx.lineTo(-10, -28); ctx.lineTo(-13, -20);
+  ctx.stroke();
+  ctx.restore();
+
+  if (pose === 'defend') {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(72,100,126,0.86)'; ctx.lineWidth = 3.4;
+    ctx.beginPath(); ctx.arc(0, -28, 21, -1.32, 1.32); ctx.stroke();
+    ctx.strokeStyle = `rgba(94,197,255,${0.34 + pulse * 0.22})`; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(0, -28, 23, -1.32, 1.32); ctx.stroke();
+    ctx.restore();
+  }
+
+  if (charging || casting) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const ringR = 21 + chargeProgress * 8 + pulse * 1.5;
+    ctx.strokeStyle = `rgba(89,193,255,${0.34 + chargeProgress * 0.38})`;
+    ctx.lineWidth = 1.15;
+    ctx.beginPath(); ctx.arc(0, -43, ringR, 0, Math.PI * 2); ctx.stroke();
+    for (let i = 0; i < 7; i++) {
+      const a = i / 7 * Math.PI * 2 - t * 0.04;
+      const r = ringR - ((t * 0.12 + i * 4) % 8);
+      ctx.fillStyle = 'rgba(164,226,255,0.72)';
+      ctx.beginPath(); ctx.arc(Math.cos(a) * r, -43 + Math.sin(a) * r, 1.1, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  if (cocoon) {
+    // Placas fechadas deixam uma fresta azul central e três marcas de turno.
+    drawAshRockPolygon(ctx, [[-23, -47], [-15, -57], [-3, -53], [-6, -17], [-18, -14], [-25, -27]], rockDark, edge, 1.4);
+    drawAshRockPolygon(ctx, [[23, -47], [15, -57], [3, -53], [6, -17], [18, -14], [25, -27]], rockDark, edge, 1.4);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const shell = ctx.createLinearGradient(0, -54, 0, -15);
+    shell.addColorStop(0, 'rgba(78,191,255,0.12)'); shell.addColorStop(0.5, 'rgba(112,215,255,0.72)'); shell.addColorStop(1, 'rgba(38,91,255,0.08)');
+    ctx.fillStyle = shell; ctx.fillRect(-1.2, -52, 2.4, 36);
+    const activeTurns = Number.isFinite(o.cocoonTurns) ? U.clamp(o.cocoonTurns, 0, 3) : 3;
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i < activeTurns ? 'rgba(176,233,255,0.9)' : 'rgba(62,93,121,0.42)';
+      ctx.beginPath(); ctx.arc(-6 + i * 6, -59, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+    for (let i = 0; i < 9; i++) {
+      const a = i / 9 * Math.PI * 2 + t * 0.025;
+      const travel = (t * 0.018 + i * 0.13) % 1;
+      const r = 39 * (1 - travel) + 9;
+      ctx.fillStyle = `rgba(90,195,255,${0.25 + travel * 0.55})`;
+      ctx.beginPath(); ctx.arc(Math.cos(a) * r, -32 + Math.sin(a) * r * 0.72, 1.1 + travel, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  if (victorious) {
+    drawAshBlueFlame(ctx, -9, -54, 10, 21 + pulse * 4, t * 0.2, 0.92);
+    drawAshBlueFlame(ctx, 9, -54, 10, 22 + (1 - pulse) * 4, t * 0.22 + 2.2, 0.92);
+  }
+
+  if (o.flash > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = Math.min(1, o.flash) * alpha;
+    ctx.fillStyle = 'rgba(222,247,255,0.72)';
+    ctx.beginPath(); ctx.ellipse(0, -30, 24, 31, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 // Vincula funções ao escopo global para compatibilidade direta
 window.drawLightSamurai = drawLightSamurai;
 window.drawWaterSamurai = drawWaterSamurai;
 window.drawFireSamurai = drawFireSamurai;
+window.drawWindBattleSprite = drawWindBattleSprite;
+window.drawStormBattleSprite = drawStormBattleSprite;
+window.drawBlueFlameSkeleton = drawBlueFlameSkeleton;
+window.drawAncientFlameGolem = drawAncientFlameGolem;
