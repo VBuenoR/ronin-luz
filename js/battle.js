@@ -136,12 +136,12 @@ const Battle = {
     if (this.E.archetype === 'ancientGolem') {
       this.push({
         dur: 76,
-        msg: 'As pedras do santuário se fecham — o Golem da Chama Ancestral rompe o próprio cárcere!'
+        msg: 'As pedras do santuário se fecham — o Daidaidarabotchi da Chama Ancestral rompe o próprio cárcere!'
       });
     } else if (this.E.archetype === 'ashSkeleton') {
       this.push({
         dur: 54,
-        msg: 'Um Esqueleto das Chamas Azuis se contrai e salta das sombras!'
+        msg: 'Um Gashadokuro das Chamas Azuis se contrai e salta das sombras!'
       });
     } else if (this.E.isBoss) {
       this.push({
@@ -360,7 +360,7 @@ const Battle = {
     const c6 = this.magicCost(6), c7 = this.magicCost(7);
     const opts = [
       { id: 'dluz', label: '盾  Defesa da Luz', ok: P.mp >= c6 && light && !Game.essenceLost,
-        desc: `Escudo sagrado: bloqueia 75% do próximo dano e cura ${4 + Game.purified} PV. Custa ${c6} PM.`,
+        desc: `Escudo sagrado: bloqueia 75% do próximo dano e cura ${4 + Math.floor(Game.purified * 0.75)} PV. Custa ${c6} PM.`,
         why: Game.essenceLost ? 'Sua essência está perdida — recupere-a para reaver este poder.'
           : !light ? 'A luz não responde à lâmina negra — Q para trocar.' : `PM insuficiente (precisa de ${c6}).` },
       { id: 'pur', label: '浄  Purificar', ok: P.mp >= c7 && light && !cocoonLocked,
@@ -554,7 +554,7 @@ const Battle = {
     this.E.flash = 0.55;
     this.E.hitT = 0;
     this.msg = gained > 0
-      ? 'CHAMAS ANCESTRAIS! O fogo de Ka alimenta o esqueleto em vez de feri-lo.'
+      ? 'CHAMAS ANCESTRAIS! O fogo de Ka alimenta o Gashadokuro em vez de feri-lo.'
       : 'CHAMAS ANCESTRAIS! A criatura já transborda vida extra.';
     this.msgT = 0;
     this.floater(this.EX, this.EY - 88, gained > 0 ? `+${gained}` : 'ABSORVIDO', '#8ee6ff', true);
@@ -683,7 +683,7 @@ const Battle = {
     const tired = this.E.fatigued;
     // névoa faz errar; o Espírito da Luz esquiva com graça; rajada afasta 50%
     const spiritDodge = this.E.spirit && !this.E.pacified && U.chance(this.E.dodge);
-    const missed = spiritDodge || (this.mistT > 0 && U.chance(0.75)) || (this.windBlastDebuff && U.chance(0.5)) || this.E.evadePhysical;
+    const missed = spiritDodge || (this.mistT > 0 && U.chance(0.90)) || (this.windBlastDebuff && U.chance(0.5)) || this.E.evadePhysical;
     const dmg = this.finalDmg(this.P.atk * (crit ? 2 : 1));
     this.push({
       dur: 16, msg: 'Você avança, a katana cantando luz...',
@@ -845,7 +845,7 @@ const Battle = {
   actLightGuard() {
     this.closeMenu();
     this.spendMagic(6);
-    const heal = Math.min(4 + Game.purified, this.P.maxHp - this.P.hp);
+    const heal = Math.min(4 + Math.floor(Game.purified * 0.75), this.P.maxHp - this.P.hp);
     this.push({
       dur: 45, msg: '盾 — Defesa da Luz! Um escudo sagrado floresce ao seu redor.',
       on: () => {
@@ -1529,12 +1529,18 @@ const Battle = {
     }
     if (this.E.script.length > 0) return;
     if (this.E.archetype === 'ashSkeleton') {
-      const patterns = [
-        ['costela', 'soco', 'defend'],
-        ['soco', 'costela', 'defend'],
-        ['costela', 'defend', 'soco']
-      ];
-      this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
+      const lowHp = this.E.hp < this.E.maxHp * 0.4;
+      const aggressive = U.chance(lowHp ? 0.6 : 0.75);
+      if (aggressive) {
+        const r = Math.random();
+        this.E.script = r < 0.4 ? ['soco', 'costela', 'defend']
+          : r < 0.75 ? ['costela', 'soco', 'defend']
+          : ['costela', 'costela', 'defend'];
+      } else {
+        this.E.script = U.chance(0.6)
+          ? ['defend', 'defend', 'soco']
+          : ['defend', 'defend', 'costela'];
+      }
     } else if (this.E.element === 'vento') {
       if (this.E.isBoss) {
         if (this.E.stormPhase) {
@@ -1597,10 +1603,19 @@ const Battle = {
         this.E.script = ['soco', 'mare', 'defend', 'charge', 'tsunami'];
       }
     } else if (this.E.mist) {
-      // yūrei: a névoa vem cedo, e os socos aproveitam sua lâmina cega
-      this.E.script = U.chance(0.7)
-        ? (U.chance(0.5) ? ['nevoa', 'soco', 'defend'] : ['soco', 'nevoa', 'defend'])
-        : ['defend', 'nevoa', 'soco'];
+      // yūrei: a névoa vem cedo, e intercala entre ataques pesados (maré), carga e defesa
+      const lowHp = this.E.hp < this.E.maxHp * 0.4;
+      const aggressive = U.chance(lowHp ? 0.6 : 0.75);
+      if (aggressive) {
+        const r = Math.random();
+        this.E.script = r < 0.4 ? ['nevoa', 'mare', 'soco']
+          : r < 0.75 ? ['charge', 'nevoa', 'mare']
+          : ['nevoa', 'mare', 'charge'];
+      } else {
+        this.E.script = U.chance(0.6)
+          ? ['defend', 'nevoa', 'soco']
+          : ['defend', 'nevoa', 'defend'];
+      }
     } else if (this.E.fly) {
       // voadores: 3 rajadas seguidas até a fadiga, ou 1 rajada e recuo defensivo
       this.E.script = U.chance(0.55)
@@ -1642,7 +1657,7 @@ const Battle = {
     if (remaining === 1) {
       this.push({
         dur: 34,
-        msg: 'As placas do casulo se abrem. O Golem volta a caçar.',
+        msg: 'As placas do casulo se abrem. O Daidaidarabotchi volta a caçar.',
         on: () => { this.anim.e = 'idle'; this.E.script = []; }
       });
     }
@@ -1687,7 +1702,7 @@ const Battle = {
       this.E.script = [];
       this.push({
         dur: 64,
-        msg: 'ULTIMATE — CHAMA CONSUMIDORA! O Golem fecha as placas e puxa o fogo do Reino por 3 turnos.',
+        msg: 'ULTIMATE — CHAMA CONSUMIDORA! O Daidaidarabotchi fecha as placas e puxa o fogo do Reino por 3 turnos.',
         on: () => {
           this.anim.e = 'cocoon';
           EnemyVFX.charge(this.E, this.EX, this.EY);
@@ -1712,7 +1727,7 @@ const Battle = {
     } else if (action === 'vulcanoCharge' && this.E.archetype === 'ancientGolem') {
       this.push({
         dur: 60,
-        msg: 'CARGA — a boca do Golem vira uma fornalha azul. Vulcano será o próximo ataque!',
+        msg: 'CARGA — a boca do Daidaidarabotchi vira uma fornalha azul. Vulcano será o próximo ataque!',
         on: () => {
           this.E.vulcanoCharged = true;
           this.anim.e = 'charge';
@@ -1734,7 +1749,7 @@ const Battle = {
       this.E.vulcanoCharged = false;
       this.push({
         dur: 18,
-        msg: 'VULCANO! O Golem cospe uma esfera ancestral que explode dentro da sua luz!',
+        msg: 'VULCANO! O Daidaidarabotchi cospe uma esfera ancestral que explode dentro da sua luz!',
         on: () => {
           this.anim.e = 'magic';
           // A esfera permanece visível até o quadro real do impacto.
@@ -1831,9 +1846,9 @@ const Battle = {
     } else if (action === 'charge') {
       this.push({
         dur: 60,
-        msg: fire
-          ? 'O magma ferve... o Shōgun das Cinzas invoca o teto da caverna!'
-          : 'O mar recua... o Shōgun acumula uma onda colossal!',
+        msg: this.E.isBoss
+          ? (fire ? 'O magma ferve... o Shōgun das Cinzas invoca o teto da caverna!' : 'O mar recua... o Shōgun acumula uma onda colossal!')
+          : `${S} acumula a energia das águas!`,
         on: () => {
           this.anim.e = 'charge';
           EnemyVFX.charge(this.E, this.EX, this.EY);
@@ -2588,7 +2603,7 @@ const Battle = {
     const fire = this.E.element === 'fogo';
     const ancestral = this.E.lightKind === 'blueFire';
     const dissolveMsg = this.E.archetype === 'ancientGolem'
-      ? 'O Golem racha de dentro para fora — a chama ancestral abandona a rocha!'
+      ? 'O Daidaidarabotchi racha de dentro para fora — a chama ancestral abandona a rocha!'
       : this.E.archetype === 'ashSkeleton'
         ? 'Os ossos desabam e as chamas azuis se libertam!'
         : (fire ? 'O espírito de fogo se desfaz em brasas!' : 'O espírito d\'água colapsa em chuva!');
@@ -2719,7 +2734,7 @@ const Battle = {
     }
     for (const lv of levelsGained) {
       this.push({
-        dur: 65, msg: `✦ Nível ${lv}! A luz interior cresce. 50% de PV e PM restaurados.`,
+        dur: 65, msg: `✦ Nível ${lv}! A luz interior cresce. 15% de PV e PM restaurados.`,
         on: () => {
           Sfx.levelup();
           Particles.burst(this.PX, this.PY - 40, 20, () => ({
@@ -2740,7 +2755,7 @@ const Battle = {
             Sfx.amulet();
           }
         });
-        this.push({ dur: 68, msg: 'A chama azul permanece no Vale — mas já não obedece ao Golem.' });
+        this.push({ dur: 68, msg: 'A chama azul permanece no Vale — mas já não obedece ao Daidaidarabotchi.' });
       } else if (this.E.element === 'fogo') {
         this.push({
           dur: 90, msg: 'O Shōgun das Cinzas desmorona em brasas que esfriam...',
@@ -3215,7 +3230,7 @@ const Battle = {
       ctx.fillStyle = 'rgba(215,235,255,0.85)';
       ctx.font = '700 13px "Segoe UI", sans-serif';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText(`霧 névoa: ataques erram 75% (${this.mistT} rodada${this.mistT > 1 ? 's' : ''}) — magias não erram`, 30, statusY);
+      ctx.fillText(`霧 névoa: ataques erram 90% (${this.mistT} rodada${this.mistT > 1 ? 's' : ''}) — magias não erram`, 30, statusY);
       ctx.restore();
       statusY += 20;
     }
@@ -3491,40 +3506,42 @@ const Battle = {
       if (this.menu.open && E.script.length) {
         const next = E.script[0];
         const fireE = E.element === 'fogo';
+        const S = this.cap(E.short);
+        const isFem = E.short.startsWith('a ');
         const info = ({
-          soco:    { k: '攻', c: '255,120,110', danger: false, label: 'GOLPE' },
-          costela: { k: '骨', c: '100,210,255', danger: true, label: 'COSTELA — DEFENDA' },
-          vulcanoCharge: { k: '蓄', c: '95,205,255', danger: true, label: 'CARGA DE VULCANO' },
-          vulcano: { k: '噴', c: '115,220,255', danger: true, label: 'VULCANO — DEFENDA' },
-          cocoon:  { k: '繭', c: '105,215,255', danger: true, label: 'CASULO IMINENTE — PREPARE PULSO' },
-          multi:   { k: '連', c: '255,150,80', danger: true,  label: 'RAJADA — DEFENDA' },
-          fatigue: { k: '疲', c: '170,230,150', danger: false, label: 'FADIGA — CASTIGUE' },
-          nevoa:   { k: '霧', c: '215,235,255', danger: true,  label: 'NÉVOA — USE MAGIA' },
+          soco:    { k: '攻', c: '255,120,110', danger: false, label: `${S} vai desferir um golpe` },
+          costela: { k: '骨', c: '100,210,255', danger: true, label: `${S} vai arremessar a costela` },
+          vulcanoCharge: { k: '蓄', c: '95,205,255', danger: true, label: `${S} está acumulando energia de Vulcano` },
+          vulcano: { k: '噴', c: '115,220,255', danger: true, label: `${S} vai cuspir a esfera de Vulcano` },
+          cocoon:  { k: '繭', c: '105,215,255', danger: true, label: `${S} vai se fechar no casulo` },
+          multi:   { k: '連', c: '255,150,80', danger: true,  label: `${S} vai usar a rajada` },
+          fatigue: { k: '疲', c: '170,230,150', danger: false, label: `${S} está ${isFem ? 'cansada' : 'cansado'}` },
+          nevoa:   { k: '霧', c: '215,235,255', danger: true,  label: `${S} vai exalar a névoa` },
           mare:    fireE
-            ? { k: '炎', c: '255,160,80', danger: true, label: 'ERUPÇÃO — DEFENDA' }
-            : { k: '潮', c: '120,240,255', danger: true, label: 'MARÉ — DEFENDA' },
+            ? { k: '炎', c: '255,160,80', danger: true, label: `${S} vai invocar a erupção` }
+            : { k: '潮', c: '120,240,255', danger: true, label: `${S} vai invocar a maré` },
           defend: E.archetype === 'ashSkeleton'
-            ? { k: '骨', c: '110,215,255', danger: false, label: 'DEFESA DE OSSOS — BLOQUEIA 25%' }
-            : { k: '守', c: fireE ? '255,170,100' : '130,200,255', danger: false, label: 'DEFESA — DANO REDUZIDO' },
+            ? { k: '骨', c: '110,215,255', danger: false, label: `${S} vai erguer a defesa de ossos` }
+            : { k: '守', c: fireE ? '255,170,100' : '130,200,255', danger: false, label: `${S} vai defender` },
           charge:  fireE
-            ? { k: '炎', c: '255,160,80', danger: true, label: 'CARGA — DEFENDA' }
-            : { k: '波', c: '150,230,255', danger: true, label: 'CARGA — DEFENDA' },
+            ? { k: '炎', c: '255,160,80', danger: true, label: `${S} está acumulando carga de fogo` }
+            : { k: '波', c: '150,230,255', danger: true, label: `${S} está acumulando carga de água` },
           tsunami: fireE
-            ? { k: '隕', c: '255,160,80', danger: true, label: 'METEOROS — DEFENDA' }
-            : { k: '波', c: '150,230,255', danger: true, label: 'TSUNAMI — DEFENDA' },
-          corte_aereo: { k: '連', c: '150,200,245', danger: true, label: 'RAJADA — DEFENDA' },
-          rajada:    { k: '風', c: '150,200,245', danger: true, label: 'RAJADA — USE MAGIA' },
-          esquiva:   { k: '翔', c: '150,200,245', danger: false, label: 'ESQUIVA — MAGIA ACERTA' },
-          raio:      { k: '雷', c: '110,210,255', danger: true, label: 'RAIO — DEFENDA' },
-          explosao:  { k: '爆', c: '110,210,255', danger: true, label: 'EXPLOSÃO — DEFENDA' },
-          charge_orb: { k: '球', c: '110,210,255', danger: true, label: 'CARGA — DEFENDA' },
-          paralisante: { k: '痺', c: '110,210,255', danger: true, label: 'PARALISANTE — DEFENDA' },
-          vendaval:  { k: '斬', c: '150,200,245', danger: true, label: 'VENDAVAL — DEFENDA' },
-          investida: { k: '翔', c: '150,200,245', danger: true, label: 'INVESTIDA — DEFENDA' },
-          tornado:   { k: '旋', c: '150,200,245', danger: true, label: 'TORNADO — DEFENDA' },
-          prisao:    { k: '牢', c: '150,200,245', danger: true, label: 'PRISÃO — ESCAPE' },
-          suprema:   { k: '嵐', c: '120,180,245', danger: true, label: 'SUPREMA — DEFENDA' }
-        }[next] || { k: '？', c: '190,210,235', danger: false, label: String(next || 'AÇÃO').toUpperCase() });
+            ? { k: '隕', c: '255,160,80', danger: true, label: `${S} vai invocar a chuva de meteoros` }
+            : { k: '波', c: '150,230,255', danger: true, label: `${S} vai invocar o tsunami` },
+          corte_aereo: { k: '連', c: '150,200,245', danger: true, label: `${S} vai fazer um rasante de cortes` },
+          rajada:    { k: '風', c: '150,200,245', danger: true, label: `${S} vai disparar uma rajada de vento` },
+          esquiva:   { k: '翔', c: '150,200,245', danger: false, label: `${S} vai se esquivar de ataques físicos` },
+          raio:      { k: '雷', c: '110,210,255', danger: true, label: `${S} vai disparar um raio` },
+          explosao:  { k: '爆', c: '110,210,255', danger: true, label: `${S} vai provocar uma explosão` },
+          charge_orb: { k: '球', c: '110,210,255', danger: true, label: `${S} está carregando uma esfera elétrica` },
+          paralisante: { k: '痺', c: '110,210,255', danger: true, label: `${S} vai soltar uma carga paralisante` },
+          vendaval:  { k: '斬', c: '150,200,245', danger: true, label: `${S} vai cortar com o vendaval` },
+          investida: { k: '翔', c: '150,200,245', danger: true, label: `${S} vai fazer uma investida` },
+          tornado:   { k: '旋', c: '150,200,245', danger: true, label: `${S} vai invocar um tornado` },
+          prisao:    { k: '牢', c: '150,200,245', danger: true, label: `${S} vai conjurar a prisão de vento` },
+          suprema:   { k: '嵐', c: '120,180,245', danger: true, label: `${S} vai desferir a tempestade suprema` }
+        }[next] || { k: '？', c: '190,210,235', danger: false, label: `${S} vai realizar uma ação` });
         const ix = this.EX, iy = this.EY - 60 * this.eScale() - 34;
         const rr = info.danger ? 18 + Math.sin(frames * 0.25) * 2.5 : 16;
         ctx.save();

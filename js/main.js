@@ -504,7 +504,7 @@ const Game = {
         if (f.isBoss) {
           Hud.toast(
             f.archetype === 'ancientGolem'
-              ? 'O Golem continua preso no santuário, alimentando a chama ancestral.'
+              ? 'O Daidaidarabotchi continua preso no santuário, alimentando a chama ancestral.'
               : 'O Shōgun aguarda, imóvel como o lago.',
             f.archetype === 'ancientGolem' ? '#7ad8ff' : '#a8c4e8'
           );
@@ -626,10 +626,10 @@ const Game = {
           p.hp = Math.min(p.maxHp, p.hp + gain);
           Hud.toast('Estrela de vida — +6 PV máximos');
         } else if (pk.type === 'crystal') {
-          const gain = 2.5; // metade dos antigos 5 PM
+          const gain = 2; // +2 PM máximos
           p.maxMp += gain;
           p.mp = Math.min(p.maxMp, p.mp + gain);
-          Hud.toast('Essência de mana — +2,5 PM máximos', '#a8dcff');
+          Hud.toast('Essência de mana — +2 PM máximos', '#a8dcff');
         } else {
           continue;
         }

@@ -8,7 +8,7 @@ const TIERS = {
   3:  { name: 'Guardião do Lago',              short: 'o Guardião', hp: 58,  soco: 10, mare: 22, xp: 20, kanji: '湖', element: 'agua' },
   4:  { name: 'Abissal das Profundezas',       short: 'o Abissal',  hp: 63,  soco: 11, mare: 24, xp: 26, kanji: '淵', element: 'agua' },
   9:  { name: 'Suijin, o Shōgun Afogado',      short: 'o Shōgun',   hp: 180, soco: 10, mare: 20, xp: 68, kanji: '王', element: 'agua', boss: true },
-  5:  { name: 'Vespa de Magma',                short: 'a Vespa',    hp: 55,  soco: 3,  mare: 15, xp: 30, kanji: '蜂', element: 'fogo', fly: true, hits: 3 },
+  5:  { name: 'Vespa de Magma',                short: 'a Vespa',    hp: 55,  soco: 5,  mare: 26, xp: 30, kanji: '蜂', element: 'fogo', fly: true, hits: 3 },
   7:  { name: 'Yūrei da Névoa',                short: 'o Yūrei',    hp: 52,  soco: 9,  mare: 16, xp: 32, kanji: '霧', element: 'agua', fly: true, mist: true },
   6:  { name: 'Oni de Obsidiana',              short: 'o Oni',      hp: 75,  soco: 12, mare: 28, xp: 36, kanji: '鬼', element: 'fogo' },
   10: { name: 'Kagutsuchi, o Shōgun das Cinzas', short: 'o Shōgun das Cinzas', hp: 200, soco: 14, mare: 25, xp: 98, kanji: '炎', element: 'fogo', boss: true }

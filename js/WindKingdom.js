@@ -3276,9 +3276,7 @@ window.WindKingdom = WindKingdom;
   World.solidList = function () {
     const base = _solidList.call(this);
     if (this.current !== 'vento') return base;
-    // Electrical clouds are stable in calm air and disperse during a gust.
-    const ghosts = WindKingdom.gustActive() ? [] : WindKingdom.ghostPlatforms;
-    return base.concat(WindKingdom.movers, ghosts);
+    return base.concat(WindKingdom.movers);
   };
 
   // céu acima das nuvens

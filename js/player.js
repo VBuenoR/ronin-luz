@@ -327,8 +327,8 @@ class Player {
   levelUp() {
     this.level++;
     this.maxHp += 6; this.maxMp += 2; this.maxSta += 1;
-    this.hp = Math.min(this.maxHp, Math.round((this.hp + this.maxHp * 0.5) * 10) / 10);
-    this.mp = Math.min(this.maxMp, Math.round((this.mp + this.maxMp * 0.5) * 10) / 10);
+    this.hp = Math.min(this.maxHp, Math.round((this.hp + this.maxHp * 0.15) * 10) / 10);
+    this.mp = Math.min(this.maxMp, Math.round((this.mp + this.maxMp * 0.15) * 10) / 10);
     this.sta = this.maxSta;
   }
 
@@ -674,7 +674,8 @@ class Player {
       }
     }
     if (this.vy >= 0 && this.dropT <= 0) {
-      for (const o of World.oneways) {
+      const oneways = World.onewayList ? World.onewayList() : World.oneways;
+      for (const o of oneways) {
         if (r.x < o.x + o.w && r.x + r.w > o.x &&
             prevBottom <= o.y + 1 && this.y >= o.y && this.y <= o.y + o.h + 10) {
           this.y = o.y; this.vy = 0;

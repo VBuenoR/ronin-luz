@@ -43,7 +43,7 @@ Na água: ↑↓ nadam, Espaço dá braçada (perto da superfície, salta para f
 
 - **Caminho da luz (resiliência)**: cada purificação fortalece o sustento — toda magia de dano
   **cura +1 PV a cada 2 purificações** ao ser conjurar, e a **盾 Defesa da Luz** (6 PM, exige a
-  Katana de Luz) bloqueia **75%** do próximo dano — sem fraqueza elemental — e cura **4 + purificações** PV.
+  Katana de Luz) bloqueia **75%** do próximo dano — sem fraqueza elemental — e cura **4 + ⌊purificações × 0,75⌋** PV.
 - **Caminho da escuridão (dano)**: empunhar a Katana da Escuridão concede **+3 de dano mágico**, e cada absorção soma **+4 de dano** a todas as magias ofensivas.
   Rajada Sombria: 8 + mAtk; Barragens: 14 + mAtk; Pulso/Incinerar/Tornado: 16 + mAtk.
 
@@ -135,7 +135,7 @@ as mentiras que o seu Deus disse a você"* — e a **Katana da Escuridão**, num
 Salão Afogado, depois de todos os jatos. O velho trono na superfície ficou para sentinelas novas.
 E a antiga escalada sobre o lago agora sobe até as **Copas Sussurrantes** — plataformas entre as
 árvores onde pairam os **Yūrei da Névoa**: espíritos de chapéu de palha que exalam uma névoa que
-faz seus **ataques errarem 75% por 2 rodadas** (magias nunca erram — a névoa é o motivo de
+faz seus **ataques errarem 90% por 2 rodadas** (magias nunca erram — a névoa é o motivo de
 existir a sua mana).
 
 O portão do lago exige 3 essências. São **23 espíritos** pesando a balança do karma, e o

@@ -458,6 +458,15 @@ const World = {
     return this.solids;
   },
 
+  onewayList() {
+    let list = this.oneways;
+    if (this.current === 'vento' && window.WindKingdom) {
+      const ghosts = WindKingdom.gustActive() ? [] : WindKingdom.ghostPlatforms;
+      return list.concat(ghosts);
+    }
+    return list;
+  },
+
   palette(x, y) {
     if (this.current === 'fogo' && window.AshValley) {
       const valleyPalette = AshValley.paletteAt(y);

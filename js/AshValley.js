@@ -214,14 +214,14 @@ const AshValley = {
   registerEnemyTiers() {
     if (typeof TIERS === 'undefined') return;
     TIERS[11] = {
-      name: 'Esqueleto das Chamas Azuis', short: 'o Esqueleto',
+      name: 'Gashadokuro das Chamas Azuis', short: 'o Gashadokuro',
       hp: 78, soco: 11, mare: 17, xp: 44, kanji: '骸', element: 'fogo',
       archetype: 'ashSkeleton', lightKind: 'blueFire',
       fireAbsorb: true, fireAbsorbRatio: 0.5, extraHpCap: 0.5,
       guardReduction: 0.25, ribBurnChance: 0.35, ribBurnDamage: 3
     };
     TIERS[14] = {
-      name: 'Golem da Chama Ancestral', short: 'o Golem Ancestral',
+      name: 'Daidaidarabotchi da Chama Ancestral', short: 'o Daidaidarabotchi',
       hp: 240, soco: 15, mare: 23, xp: 125, kanji: '獄', element: 'fogo',
       boss: true, miniBoss: true, archetype: 'ancientGolem', lightKind: 'blueFire',
       vulcanoDamage: 24, vulcanoBurnDamage: 4,
