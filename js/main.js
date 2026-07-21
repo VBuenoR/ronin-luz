@@ -1111,7 +1111,7 @@ const Game = {
     }
     ctx.fillStyle = 'rgba(160,175,205,0.75)';
     ctx.font = '12px "Segoe UI", sans-serif';
-    ctx.fillText('← →  mover      ESPAÇO  pular      SHIFT  dash      X  atacar      ↑ ↓  escalar paredes', 480, 522);
+    ctx.fillText('A/D ou ← →  mover      ESPAÇO  pular      SHIFT  dash      X  atacar      W/S ou ↑ ↓  interagir/escalar', 480, 522);
   },
 
   drawTitle() {
@@ -1327,7 +1327,7 @@ const Game = {
     ctx.fillStyle = `rgba(236,228,207,${promptAlpha})`; ctx.font = '600 17px "Segoe UI", sans-serif';
     ctx.fillText('— PRESSIONE  ENTER —', 480, 326);
     ctx.fillStyle = 'rgba(148,164,191,0.68)'; ctx.font = '12px "Segoe UI", sans-serif';
-    ctx.fillText('← →  mover      ESPAÇO  pular      SHIFT  dash      X  atacar      ↑ ↓  escalar paredes', 480, 522);
+    ctx.fillText('A/D ou ← →  mover      ESPAÇO  pular      SHIFT  dash      X  atacar      W/S ou ↑ ↓  interagir/escalar', 480, 522);
   },
 
   drawIntro() {

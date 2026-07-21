@@ -294,6 +294,7 @@ class Player {
     this.dashDx = 1; this.dashDy = 0;
     this.attackT = 0; this.attackCd = 0;
     this.steerLock = 0; this.dropT = 0;
+    this.moveTap = 0; this.moveTapT = 0;
     this.invuln = 0; this.t = 0; this.runPhase = 0;
     this.inWater = false;
 
@@ -455,7 +456,8 @@ class Player {
       }));
     }
 
-    const L = Input.is('left'), R = Input.is('right');
+    const L = Input.is('left');
+    const R = Input.is('right');
     let move = (R ? 1 : 0) - (L ? 1 : 0);
     if (this.steerLock > 0) move = 0;
 
