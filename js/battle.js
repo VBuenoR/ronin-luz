@@ -1001,7 +1001,8 @@ const Battle = {
     const brokeCocoon = this.E.archetype === 'ancientGolem' && this.E.cocoonTurns > 0;
     if (brokeCocoon) {
       this.E.cocoonTurns = 0;
-      this.E.script = [];
+      this.E.fatigued = true;
+      this.E.script = ['fatigue'];
       this.anim.e = 'hurt';
     }
     this.E.hp = Math.max(0, this.E.hp - dmg);
@@ -1014,7 +1015,7 @@ const Battle = {
     Game.freezeFrames = pierce ? 6 : 5;
     this.floater(this.EX, this.EY - 80, '-' + dmg, '#bceeff', true);
     if (brokeCocoon) {
-      this.msg = 'PULSO DE ÁGUA! O casulo racha e a Chama Consumidora é interrompida.';
+      this.msg = 'PULSO DE ÁGUA! O casulo racha — o Daidaidarabotchi fica fadigado!';
       this.msgT = 0;
       Particles.burst(this.EX, this.EY - 44, 24, () => ({
         x: this.EX + U.rand(-25, 25), y: this.EY - 44 + U.rand(-30, 26),
@@ -1577,12 +1578,18 @@ const Battle = {
       if (this.E.vulcanoCharged) {
         this.E.script = ['vulcano'];
       } else {
-        const patterns = [
-          ['soco', 'vulcanoCharge', 'vulcano'],
-          ['vulcanoCharge', 'vulcano', 'soco'],
-          ['soco', 'soco', 'vulcanoCharge', 'vulcano']
-        ];
-        this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
+        const lowHp = this.E.hp < this.E.maxHp * 0.4;
+        const aggressive = U.chance(lowHp ? 0.5 : 0.75);
+        if (aggressive) {
+          const r = Math.random();
+          this.E.script = r < 0.4 ? ['vulcanoCharge', 'vulcano']
+            : r < 0.75 ? ['soco', 'vulcanoCharge', 'vulcano']
+            : ['soco', 'soco', 'vulcanoCharge', 'vulcano'];
+        } else {
+          this.E.script = U.chance(0.6)
+            ? ['defend', 'soco', 'vulcanoCharge', 'vulcano']
+            : ['defend', 'defend', 'soco'];
+        }
       }
     } else if (this.E.isBoss) {
       if (this.E.element === 'fogo') {
@@ -1783,6 +1790,7 @@ const Battle = {
           this.anim.e = 'idle';
           Game.cam.targetZoom = 1.12;
           Game.cam.targetOffsetX = 0;
+          this.E.script = ['fatigue'];
         }
       });
     } else if (action === 'costela' && this.E.archetype === 'ashSkeleton') {
@@ -1952,10 +1960,13 @@ const Battle = {
         }
       });
     } else if (action === 'fatigue') {
-      // exausta pelas rajadas: perde o turno e recebe 1.5× de dano
+      // exausto por rajadas, vulcano ou quebra de casulo: perde o turno e recebe 1.5× de dano
       this.E.fatigued = true;
+      const fatigueMsg = this.E.archetype === 'ancientGolem'
+        ? `${S} está exausto após a chama ancestral! (dano recebido ×1.5)`
+        : `${S} arqueja, exausta — as asas falham! (dano recebido ×1.5)`;
       this.push({
-        dur: 50, msg: `${S} arqueja, exausta — as asas falham! (dano recebido ×1.5)`,
+        dur: 50, msg: fatigueMsg,
         on: () => {
           this.anim.e = 'hurt';
           EnemyVFX.fatigue(this.E, this.EX, this.EY);
