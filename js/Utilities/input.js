@@ -35,25 +35,21 @@ const Input = {
     });
     addEventListener('keydown', e => {
       const code = e.code;
-      const key = e.key;
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'F9'].includes(code) ||
-          ['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(key)) {
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'F9'].includes(code)) {
         e.preventDefault();
       }
 
-      const wasDown = !!this.keys[code] || (key && !!this.keys[key]);
+      // Rastreamos APENAS e.code — é estável sob Shift/CapsLock/layout. Rastrear
+      // e.key travava as teclas: com Shift segurado (dash), o keyup de uma letra
+      // chega em maiúsculo ('D') enquanto o keydown foi minúsculo ('d'), então a
+      // minúscula nunca era limpa e a direção ficava presa.
+      const wasDown = !!this.keys[code];
       this.keys[code] = true;
-      if (key) this.keys[key] = true;
-
-      if (!e.repeat && !wasDown) {
-        this.just[code] = true;
-        if (key) this.just[key] = true;
-      }
+      if (!e.repeat && !wasDown) this.just[code] = true;
       Sfx.init();
     });
     addEventListener('keyup', e => {
       this.keys[e.code] = false;
-      if (e.key) this.keys[e.key] = false;
     });
     addEventListener('blur', () => this.reset());
     document.addEventListener('visibilitychange', () => {
