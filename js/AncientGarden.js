@@ -118,6 +118,20 @@ const AncientGarden = {
   cut: null,          // { t, phase: fade|beam|lines|rise, line, lineT, riseT }
   reading: null,
   nearStone: null, nearPortal: false, nearArmor: false,
+  portalMenu: null,
+
+  // os três destinos do portal — nome, dificuldade e ponto de spawn
+  realms: [
+    { id: 'floresta', kanji: '水', name: 'Reino da Água', diff: 'Fácil', stars: 1,
+      col: '120,200,255', hint: 'Onde a jornada começa — espíritos das águas.',
+      spawn: { x: 200, y: 1200 } },
+    { id: 'vento', kanji: '風', name: 'Reino do Vento', diff: 'Médio', stars: 2,
+      col: '176,235,205', hint: 'A fortaleza suspensa — rajadas e escalada.',
+      spawn: { x: 4900, y: 1360 } },
+    { id: 'fogo', kanji: '火', name: 'Reino do Fogo', diff: 'Difícil', stars: 3,
+      col: '255,140,70', hint: 'O Vale dos Ossos — o fogo queima a alma.',
+      spawn: { x: 3520, y: 3580 } }
+  ],
   trained: false,     // a Voz só dá a aula completa uma vez
 
   // o adversário de treino (objeto de campo sintético, como o Espírito)
@@ -299,18 +313,11 @@ const AncientGarden = {
     }
     if (this.armorFoe && this.armorFoe.cool > 0) this.armorFoe.cool--;
 
-    // o portal para o Reino da Água (↓ para atravessar)
+    // o portal dos reinos (↓ abre o menu de escolha)
     this.nearPortal = Math.abs(p.x - this.PORTAL.x) < 46 && Math.abs(p.y - this.PORTAL.y) < 90;
-    if (this.nearPortal && !G.wipe && Input.pressed('downKey')) {
+    if (this.nearPortal && !G.wipe && !this.portalMenu && Input.pressed('downKey')) {
       Sfx.confirm();
-      G.startWipe(() => {
-        World.load('floresta');
-        p.x = 200; p.y = 1200; p.vx = 0; p.vy = 0;
-        G.checkpoint = { map: 'floresta', x: 200, y: 1200 };
-        G.cam.x = U.clamp(p.x - 480, 0, World.width - 960);
-        G.cam.y = U.clamp(p.y - 330, 0, World.height - 540);
-        Hud.showBanner('水', 'Reino da Água', 'A jornada da purificação começa.');
-      });
+      this.portalMenu = { idx: 0, t: 0 };
     }
 
     // névoa dourada baixa do jardim
@@ -331,6 +338,106 @@ const AncientGarden = {
       this.reading = null;
       Sfx.confirm();
     }
+  },
+
+  // ─────────────── menu de escolha de reino (no portal) ───────────────
+  portalMenuUpdate(G) {
+    const m = this.portalMenu;
+    m.t++;
+    if (Input.pressed('left'))  { m.idx = (m.idx + this.realms.length - 1) % this.realms.length; if (Sfx.menuMove) Sfx.menuMove(); }
+    if (Input.pressed('right')) { m.idx = (m.idx + 1) % this.realms.length; if (Sfx.menuMove) Sfx.menuMove(); }
+    // ↑ volta (Esc é capturado pela pausa antes de chegar aqui)
+    if (m.t > 12 && (Input.pressed('up') || Input.pressed('back'))) { this.portalMenu = null; Sfx.confirm(); return; }
+    if (m.t > 12 && Input.pressed('confirm')) this.pickRealm(G, this.realms[m.idx]);
+  },
+
+  pickRealm(G, realm) {
+    Sfx.confirm();
+    this.portalMenu = null;
+    G.startWipe(() => {
+      World.load(realm.id);
+      const p = G.player;
+      p.x = realm.spawn.x; p.y = realm.spawn.y; p.vx = 0; p.vy = 0; p.facing = 1;
+      if (p.setMeditating) p.setMeditating(false);
+      G.checkpoint = { map: realm.id, x: realm.spawn.x, y: realm.spawn.y };
+      G.cam.x = U.clamp(p.x - 480, 0, World.width - 960);
+      G.cam.y = U.clamp(p.y - 330, 0, World.height - 540);
+      Hud.showBanner(realm.kanji, realm.name, realm.diff + ' — ' + realm.hint);
+      if (window.SaveSystem) SaveSystem.saveGame('portal');
+    });
+  },
+
+  _wrapText(ctx, text, cx, y, maxW, lh) {
+    const words = text.split(' ');
+    let line = '', yy = y;
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { ctx.fillText(line, cx, yy); line = w; yy += lh; }
+      else line = test;
+    }
+    if (line) ctx.fillText(line, cx, yy);
+  },
+
+  _portalMenu(ctx, frames) {
+    const m = this.portalMenu;
+    ctx.save();
+    ctx.fillStyle = 'rgba(4,8,14,0.68)';
+    ctx.fillRect(0, 0, 960, 540);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255,236,190,0.96)';
+    ctx.font = '700 24px "Yu Mincho","Segoe UI",serif';
+    ctx.fillText('Escolha o reino', 480, 78);
+    ctx.fillStyle = 'rgba(150,165,190,0.8)';
+    ctx.font = 'italic 12px "Segoe UI",sans-serif';
+    ctx.fillText('←  →  escolher   ·   Enter confirmar   ·   ↑ voltar', 480, 106);
+
+    const cardW = 250, gap = 22, total = 3 * cardW + 2 * gap;
+    const x0 = 480 - total / 2, cy = 300;
+    for (let i = 0; i < this.realms.length; i++) {
+      const r = this.realms[i];
+      const cx = x0 + i * (cardW + gap);
+      const sel = m.idx === i;
+      ctx.fillStyle = sel ? 'rgba(20,26,40,0.97)' : 'rgba(12,16,26,0.9)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(cx, cy - 120, cardW, 240, 12); else ctx.rect(cx, cy - 120, cardW, 240);
+      ctx.fill();
+      ctx.lineWidth = sel ? 3 : 1.4;
+      ctx.strokeStyle = sel ? `rgba(${r.col},${0.7 + 0.3 * Math.sin(frames * 0.12)})` : 'rgba(120,130,150,0.4)';
+      ctx.stroke();
+      // brilho do reino
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(cx + cardW / 2, cy - 46, 4, cx + cardW / 2, cy - 46, 96);
+      g.addColorStop(0, `rgba(${r.col},${sel ? 0.36 : 0.15})`);
+      g.addColorStop(1, `rgba(${r.col},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(cx, cy - 120, cardW, 170);
+      ctx.restore();
+      // kanji
+      ctx.fillStyle = `rgba(${r.col},0.96)`;
+      ctx.font = '700 62px serif';
+      ctx.fillText(r.kanji, cx + cardW / 2, cy - 46);
+      // nome
+      ctx.fillStyle = sel ? '#fff' : 'rgba(210,216,230,0.85)';
+      ctx.font = '700 17px "Yu Mincho","Segoe UI",serif';
+      ctx.fillText(r.name, cx + cardW / 2, cy + 26);
+      // dificuldade (pontos coloridos)
+      const dcol = r.stars === 1 ? '150,220,150' : r.stars === 2 ? '235,205,120' : '235,120,110';
+      ctx.fillStyle = `rgb(${dcol})`;
+      ctx.font = '700 13px "Segoe UI",sans-serif';
+      ctx.fillText('●'.repeat(r.stars) + '○'.repeat(3 - r.stars) + '   ' + r.diff, cx + cardW / 2, cy + 54);
+      // descrição
+      ctx.fillStyle = 'rgba(170,180,196,0.78)';
+      ctx.font = '11px "Segoe UI",sans-serif';
+      this._wrapText(ctx, r.hint, cx + cardW / 2, cy + 80, cardW - 26, 15);
+      // seta do selecionado
+      if (sel) {
+        ctx.fillStyle = `rgba(${r.col},${0.7 + 0.3 * Math.sin(frames * 0.15)})`;
+        ctx.font = '700 16px "Segoe UI",sans-serif';
+        ctx.fillText('▼', cx + cardW / 2, cy - 138 + Math.sin(frames * 0.1) * 2);
+      }
+    }
+    ctx.restore();
   },
 
   // ═══════════════ o duelo de treino (dentro da batalha) ═══════════════
@@ -983,15 +1090,16 @@ const AncientGarden = {
     ctx.restore();
 
     // prompts de interação
-    if (!this.cut && !this.reading) {
+    if (!this.cut && !this.reading && !this.portalMenu) {
       if (this.nearStone) this._prompt(ctx, this.nearStone.x - cam.x, this.nearStone.y - 78 - cam.y, '↑ Ler', frames);
       if (this.nearArmor && (!this.armorFoe || this.armorFoe.cool <= 0)) {
         this._prompt(ctx, this.ARMOR.x - cam.x, this.ARMOR.y - 138 - cam.y, 'X / J — Treinar', frames);
       }
-      if (this.nearPortal) this._prompt(ctx, this.PORTAL.x - cam.x, this.PORTAL.y - 132 - cam.y, '↓ Atravessar', frames);
+      if (this.nearPortal) this._prompt(ctx, this.PORTAL.x - cam.x, this.PORTAL.y - 132 - cam.y, '↓ Escolher reino', frames);
     }
 
     if (this.reading) this._readingPanel(ctx, this.reading, frames);
+    if (this.portalMenu) this._portalMenu(ctx, frames);
     if (this.cut) this._cutOverlay(ctx, cam, frames);
   },
 
@@ -1385,6 +1493,7 @@ window.AncientGarden = AncientGarden;
     if (World.current === 'jardim') {
       if (AG.cut) { AG.cutUpdate(this); Hud.update(); return; }
       if (AG.reading) { AG.readingUpdate(this); Hud.update(); return; }
+      if (AG.portalMenu) { AG.portalMenuUpdate(this); Hud.update(); return; }
     } else if (AG.cut) {
       // cutscene órfã (o mapa mudou por baixo dela): encerra e devolve a câmera
       AG.cut = null;
@@ -1486,4 +1595,31 @@ window.AncientGarden = AncientGarden;
     return _dws(ctx, x, y, s, tier, o);
   };
   try { drawWaterSamurai = window.drawWaterSamurai; } catch (e) { /* binding const */ }
+
+  // 16) spawns escolhidos pelo portal: torii no Vale dos Ossos (canto oeste),
+  //     checkpoint no moinho do Vento, e remoção do esqueleto que ocupava o canto.
+  const fireSpawn = AG.realms.find(r => r.id === 'fogo').spawn;
+  if (World.mapFogo && Array.isArray(World.mapFogo.checkpoints)
+      && !World.mapFogo.checkpoints.some(c => c.id === 'gardenFireTorii')) {
+    World.mapFogo.checkpoints.push({ id: 'gardenFireTorii', x: fireSpawn.x, y: fireSpawn.y });
+    // se o Reino do Fogo já está carregado, reflete no vivo
+    if (World.current === 'fogo' && !World.checkpoints.some(c => c.id === 'gardenFireTorii')) {
+      World.checkpoints.push({ id: 'gardenFireTorii', x: fireSpawn.x, y: fireSpawn.y });
+    }
+  }
+  if (window.WindKingdom && WindKingdom.map && Array.isArray(WindKingdom.map.checkpoints)
+      && !WindKingdom.map.checkpoints.some(c => c.x === 4900 && c.y === 1360)) {
+    WindKingdom.map.checkpoints.push({ id: 'gardenWindTorii', x: 4900, y: 1360 });
+    if (World.current === 'vento' && !World.checkpoints.some(c => c.x === 4900 && c.y === 1360)) {
+      World.checkpoints.push({ id: 'gardenWindTorii', x: 4900, y: 1360 });
+    }
+  }
+  // remove o esqueleto do canto inferior-oeste do Vale (spec + instância viva)
+  if (window.AshValley && Array.isArray(AshValley.enemySpawns)) {
+    AshValley.enemySpawns = AshValley.enemySpawns.filter(s => s.id !== 'ashSkeletonE');
+  }
+  if (typeof Enemies !== 'undefined' && Array.isArray(Enemies.list)) {
+    const i = Enemies.list.findIndex(e => e.id === 'ashSkeletonE');
+    if (i >= 0) Enemies.list.splice(i, 1);
+  }
 })();

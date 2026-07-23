@@ -9,11 +9,77 @@
   html,body{margin:0;padding:0;background:#04060e;height:100%;overflow:hidden}
   canvas{display:block;position:absolute;inset:0;margin:auto;image-rendering:auto}
   #game-ui{pointer-events:none}
+  #battle-log{
+    position:fixed;
+    z-index:4;
+    box-sizing:border-box;
+    width:520px;
+    height:112px;
+    overflow:hidden;
+    color:#f4e6c4;
+    background:linear-gradient(180deg,rgba(6,10,22,.94),rgba(8,13,28,.88));
+    border:1px solid rgba(255,214,130,.42);
+    box-shadow:0 8px 24px rgba(0,0,0,.38),inset 0 0 20px rgba(90,130,190,.07);
+    font-family:"Segoe UI",sans-serif;
+    transform-origin:top left;
+    pointer-events:auto;
+  }
+  #battle-log[hidden]{display:none}
+  .battle-log__header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    height:24px;
+    box-sizing:border-box;
+    padding:0 10px;
+    border-bottom:1px solid rgba(140,180,240,.22);
+    color:#ffe9b0;
+    background:rgba(255,214,130,.055);
+    font:700 9px "Segoe UI",sans-serif;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+  }
+  .battle-log__hint{
+    color:#7187a8;
+    font-weight:600;
+    letter-spacing:.04em;
+    text-transform:none;
+  }
+  #battle-log-messages{
+    height:87px;
+    box-sizing:border-box;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    scrollbar-color:rgba(255,214,130,.42) rgba(7,12,25,.5);
+    scrollbar-width:thin;
+    padding:5px 10px 7px;
+  }
+  .battle-log__entry{
+    display:grid;
+    grid-template-columns:10px 1fr;
+    gap:4px;
+    margin:0 0 3px;
+    color:#c9d8ec;
+    font-size:11px;
+    line-height:1.28;
+  }
+  .battle-log__entry:last-child{color:#fff0c9}
+  .battle-log__marker{color:#d5ad59;font-weight:800}
+  @media (prefers-reduced-motion:reduce){
+    #battle-log{scroll-behavior:auto}
+  }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <canvas id="game-ui" aria-hidden="true"></canvas>
+<section id="battle-log" role="log" aria-live="polite" aria-label="Histórico do combate" hidden>
+  <div class="battle-log__header">
+    <span>Relato do combate</span>
+    <span class="battle-log__hint">histórico rolável ↓</span>
+  </div>
+  <div id="battle-log-messages"></div>
+</section>
 <script src="js/Utilities/utils.js?v=9"></script>
 <script src="js/Utilities/audio.js?v=17"></script>
 <script src="js/Utilities/input.js?v=14"></script>
@@ -29,20 +95,22 @@
 <script src="js/world.js?v=28"></script>
 <script src="js/player.js?v=25"></script>
 <script src="js/enemies.js?v=16"></script>
-<script src="js/battle.js?v=36"></script>
+<script src="js/battle.js?v=37"></script>
 <script src="js/hud.js?v=15"></script>
 <script src="js/Configs/vfx_configs.js?v=14"></script>
 <script src="js/Shaders/Shaders.js?v=13"></script>
 <script src="js/PostProcessing/PostProcessor.js?v=11"></script>
 <script src="js/LakeSerpentSystem.js?v=2"></script>
-<script src="js/SpiritOfLight.js?v=2"></script>
-<script src="js/WindKingdom.js?v=17"></script>
+<script src="js/SpiritOfLight.js?v=3"></script>
+<script src="js/WindKingdom.js?v=18"></script>
 <script src="js/WindFortress.js?v=2"></script>
 <script src="js/AshValley.js?v=12"></script>
-<script src="js/main.js?v=35"></script>
-<script src="js/AncientGarden.js?v=5"></script>
-<script src="js/Readability.js?v=1"></script>
-<script src="js/SaveSystem.js?v=3"></script>
+<script src="js/main.js?v=36"></script>
+<script src="js/AncientGarden.js?v=7"></script>
+<script src="js/Readability.js?v=2"></script>
+<script src="js/SaveSystem.js?v=4"></script>
 <script src="js/AncientForge.js?v=9"></script>
+<script src="js/AbilityMenu.js?v=3"></script>
+<script src="js/SunkenGrotto.js?v=1"></script>
 </body>
 </html>

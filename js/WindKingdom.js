@@ -241,6 +241,7 @@ const WindKingdom = {
       vx: U.rand(-1.6, 1.6), vy: U.rand(-2.2, -0.3),
       life: 46, size: 2.4, color: 'rgba(191,235,228,0.9)', type: 'wisp'
     }));
+    if (window.SaveSystem) SaveSystem.saveGame('bússola das correntes');
   },
 
   featherCount() { return this.phoenixFeathers.filter((feather) => feather.taken).length; },
@@ -264,6 +265,7 @@ const WindKingdom = {
         p.sta = p.maxSta;
         Hud.showBanner('鳥', 'Asas da Fenix', 'No ar, segure ESPACO para planar. As asas consomem vigor.');
       }
+      if (window.SaveSystem) SaveSystem.saveGame('pena da fênix');
     }
   },
 

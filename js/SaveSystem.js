@@ -88,6 +88,11 @@ const SaveSystem = {
         fireAltarTaken: !!(World.fireAltar && World.fireAltar.taken),
         windAmuletTaken: !!(window.WindKingdom && WindKingdom.windAmulet && WindKingdom.windAmulet.taken)
       },
+      wind: window.WindKingdom ? {
+        compassTaken: !!WindKingdom.compass.taken,
+        phoenixFeathers: WindKingdom.phoenixFeathers.map(feather => !!feather.taken),
+        phoenixUnlocked: !!WindKingdom.phoenixUnlocked
+      } : null,
       enemies: (typeof Enemies !== 'undefined' ? Enemies.list : []).map(e => ({
         dead: !!e.dead, purified: !!e.purified, absorbed: !!e.absorbed, cool: e.cool || 0
       })),
@@ -148,6 +153,14 @@ const SaveSystem = {
     if (window.WindKingdom && WindKingdom.windAmulet) {
       WindKingdom.windAmulet.taken = !!d.keyItems.windAmuletTaken;
     }
+    if (window.WindKingdom && d.wind) {
+      WindKingdom.compass.taken = !!d.wind.compassTaken;
+      (d.wind.phoenixFeathers || []).forEach((taken, i) => {
+        if (WindKingdom.phoenixFeathers[i]) WindKingdom.phoenixFeathers[i].taken = !!taken;
+      });
+      WindKingdom.phoenixUnlocked = !!d.wind.phoenixUnlocked
+        || WindKingdom.phoenixFeathers.every(feather => feather.taken);
+    }
 
     // coletáveis por mapa (objetos vivem em World.maps — persistem entre loads)
     for (const id of Object.keys(d.pickups || {})) {
@@ -194,6 +207,12 @@ const SaveSystem = {
     P.maxSta = pv.maxSta; P.sta = Math.min(pv.sta, pv.maxSta);
     P.level = pv.level || 1; P.xp = pv.xp || 0;
     if (P.setMeditating) P.setMeditating(false);
+    // Normaliza saves antigos, nos quais o Espírito guardava 75% da vida
+    // original. A regra atual usa 50% também para uma essência já perdida.
+    if (G.essenceLost && G.essence) {
+      const originalMax = P.maxHp + G.hpPenalty;
+      G.essence.spiritHp = Math.max(12, Math.round(originalMax * 0.50));
+    }
 
     G.cam.x = U.clamp(P.x - 480, 0, World.width - 960);
     G.cam.y = U.clamp(P.y - 330, 0, World.height - 540);
@@ -311,7 +330,7 @@ const SaveSystem = {
       { label: this.confirmNew ? 'Apagar save e recomeçar?' : 'Novo Jogo', ok: true }
     ];
     for (let i = 0; i < 3; i++) {
-      const idx = 3 + i;
+      const idx = 4 + i;
       const sel = G.pauseIdx === idx;
       const oy = ey + 24 + i * 34;
       if (sel) {
@@ -383,8 +402,12 @@ window.SaveSystem = SaveSystem;
     _upd.call(this);
   };
 
-  // 3) menu de pausa com Salvar/Carregar/Novo Jogo (6 opções)
+  // 3) menu de pausa com Habilidades/Salvar/Carregar/Novo Jogo (7 opções)
   Game.updatePauseMenu = function () {
+    if (window.AbilityMenu && AbilityMenu.open) {
+      AbilityMenu.update(this);
+      return;
+    }
     const isEscOrP = (Input.keys['Escape'] && Input.just['Escape']) || (Input.keys['KeyP'] && Input.just['KeyP']);
     if (isEscOrP) {
       Sfx.confirm();
@@ -392,7 +415,7 @@ window.SaveSystem = SaveSystem;
       this.state = this.prevState;
       return;
     }
-    const optionsCount = 6;
+    const optionsCount = 7;
     if (Input.pressed('up')) {
       this.pauseIdx = (this.pauseIdx + optionsCount - 1) % optionsCount;
       SS.confirmNew = false;
@@ -409,22 +432,26 @@ window.SaveSystem = SaveSystem;
         Sfx.confirm();
         this.state = this.prevState;
       }
-    } else if (this.pauseIdx === 1) {       // Volume SFX
+    } else if (this.pauseIdx === 1) {       // Habilidades
+      if (Input.pressed('confirm') && window.AbilityMenu) {
+        AbilityMenu.openMenu();
+      }
+    } else if (this.pauseIdx === 2) {       // Volume SFX
       let change = 0;
       if (Input.pressed('left')) change = -0.1;
       if (Input.pressed('right')) change = 0.1;
       if (change !== 0) { Sfx.setSfxVolume(Sfx.sfxVolume + change); Sfx.menuMove(); }
-    } else if (this.pauseIdx === 2) {       // Volume Música
+    } else if (this.pauseIdx === 3) {       // Volume Música
       let change = 0;
       if (Input.pressed('left')) change = -0.1;
       if (Input.pressed('right')) change = 0.1;
       if (change !== 0) { Sfx.setMusicVolume(Sfx.musicVolume + change); Sfx.menuMove(); }
-    } else if (this.pauseIdx === 3) {       // Salvar Jogo
+    } else if (this.pauseIdx === 4) {       // Salvar Jogo
       if (Input.pressed('confirm') && this.prevState === 'explore') {
         if (SS.saveGame('manual')) { SS.savedFlashT = 90; Sfx.confirm(); }
         else Sfx.deny();
       } else if (Input.pressed('confirm')) Sfx.deny();
-    } else if (this.pauseIdx === 4) {       // Carregar Jogo
+    } else if (this.pauseIdx === 5) {       // Carregar Jogo
       if (Input.pressed('confirm')) {
         if (SS.hasSave()) {
           Sfx.confirm();
@@ -438,7 +465,7 @@ window.SaveSystem = SaveSystem;
           });
         } else Sfx.deny();
       }
-    } else if (this.pauseIdx === 5) {       // Novo Jogo (confirmação dupla)
+    } else if (this.pauseIdx === 6) {       // Novo Jogo (confirmação dupla)
       if (Input.pressed('confirm')) {
         if (!SS.confirmNew) { SS.confirmNew = true; Sfx.menuMove(); }
         else {

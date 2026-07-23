@@ -23,6 +23,7 @@ Sem dependências, sem build — HTML5 Canvas e WebAudio puros.
 | ↓ | empunhar a Katana da Escuridão (perto dela) |
 | Q | trocar de katana — no mapa e no combate (ação livre) |
 | E | equipar/alternar amuleto (Sui / Ka / Fū) — **só fora de combate** |
+| P / Esc | pausar; o menu de pausa abre o **Códice de Habilidades** |
 | Espaço (no ar) | salto duplo (explosão cinemática de vento) — **exige Amuleto de Vento (Fū)** |
 
 Na água: ↑↓ nadam, Espaço dá braçada (perto da superfície, salta para fora), o dash funciona submerso.
@@ -33,7 +34,7 @@ Na água: ↑↓ nadam, Espaço dá braçada (perto da superfície, salta para f
 - **守 Defender** — reduz o próximo dano pela metade e recupera **2 EST e 3 PM**. Defender é o que
   carrega suas magias — o ciclo é: leia a intenção, defenda no golpe pesado, gaste o PM acumulado.
 - **術 Magia** — forte e cara: **盾 Defesa da Luz** desde o início;
-  Purificar (7 PM); Absorver (7 PM); Rajada Sombria (5 PM); e as magias do amuleto equipado (6 PM cada):
+  Purificar (7 PM); Absorver (7 PM); Rajada Sombria (6 PM); e as magias do amuleto equipado (6 PM cada):
   - **Sui (Água)**: Barragem de Água (dano + escudo) e Pulso de Água (perfura a defesa de fogo).
   - **Ka (Fogo)**: Barragem de Fogo (dano + escudo) e Incinerar (perfura e crita contra água).
   - **Fū (Vento)**: Tornado (perfura a defesa de espíritos de água).
@@ -44,8 +45,10 @@ Na água: ↑↓ nadam, Espaço dá braçada (perto da superfície, salta para f
 - **Caminho da luz (resiliência)**: cada purificação fortalece o sustento — toda magia de dano
   **cura +1 PV a cada 2 purificações** ao ser conjurar, e a **盾 Defesa da Luz** (6 PM, exige a
   Katana de Luz) bloqueia **75%** do próximo dano — sem fraqueza elemental — e cura **4 + ⌊purificações × 0,75⌋** PV.
-- **Caminho da escuridão (dano)**: empunhar a Katana da Escuridão concede **+3 de dano mágico**, e cada absorção soma **+4 de dano** a todas as magias ofensivas.
-  Rajada Sombria: 8 + mAtk; Barragens: 14 + mAtk; Pulso/Incinerar/Tornado: 16 + mAtk.
+- **Caminho da escuridão (dano)**: cada absorção soma **+4 de dano** às magias dos amuletos;
+  apenas empunhar a Katana da Escuridão não concede bônus gratuito.
+  Rajada Sombria: **15 + 5 por absorção**; Barragens: **7 + 4 por absorção**;
+  Pulso/Incinerar/Tornado: **16 + 4 por absorção**.
 
 ### A Fúria da Maré — defenda ou morra
 
@@ -58,8 +61,9 @@ quem defende, defende duas vezes e então ataca.
 ### Reivindicando espíritos (≤20% de vida · chefes: ≤15%)
 
 Com o inimigo **a 20% de vida ou menos** (o entalhe na barra), tanto **Purificar** quanto
-**Absorver** são garantidos — **chefes resistem até 15%**. Abaixo de 50%, a chance é de 5%.
-Custam 5 PM. Golpes contra um inimigo defendendo causam metade do dano — perfeito para aparar
+**Absorver** são garantidos — **chefes resistem até 15%**. Em inimigos comuns com até 50%,
+a passiva **Iluminado** dá 20% de chance ao Purificar; Absorver e tentativas contra chefes
+mantêm 5%. Custam 7 PM. Golpes contra um inimigo defendendo causam metade do dano — perfeito para aparar
 a vida dele até a janela sem matá-lo.
 
 **A escuridão consome**: espíritos absorvidos são apagados e **não voltam a assombrar o mapa**, restando apenas como brasas violetas. Purificados descansam para sempre como vaga-lumes dourados.
@@ -69,9 +73,9 @@ Chefes e inimigos comuns não retornam após purificados ou absorvidos.
 
 | | 浄 Purificar (Katana de Luz) | 闇 Absorver (Katana da Escuridão) |
 |---|---|---|
-| Recompensa por espírito | **+3 PV máximos** (e cura) | **+4 de dano mágico** (+3 base ao empunhar) |
+| Recompensa por espírito | **+3 PV máximos** (e cura) | **+4 de dano mágico** por absorção |
 | Bônus de dano físico | +1 a cada **3** purificações | **+2** a cada **2** absorções |
-| Extra | XP ×1,5, +2 essências, +PV +PM | XP ×1,5, +2 essências, +6 PM; a 1ª absorção desperta a **呪 Rajada Sombria**; também tem a magia **暗 Força das Trevas** (4 PM, crítico garantido nos próximos 2 turnos) |
+| Extra | XP ×1,5, +2 essências, +PV +PM; **Iluminado** eleva Purificar para 20% contra comuns com até 50% | XP ×1,5, +2 essências, +6 PM; a Katana desperta a **呪 Rajada Sombria**; também tem a magia **暗 Força das Trevas** (4 PM, crítico garantido nos próximos 2 ataques) |
 
 **Racional do balanceamento** (16 espíritos no total): os exemplos originais (+5 PV / +2 dano por
 purificação) dariam +22 de dano num jogo de dano base 5 — o chefe morreria em 5 golpes. Escalonei
@@ -95,13 +99,13 @@ o epílogo muda conforme onde você parou.
 
 ## Os amuletos — um por vez
 
-Equipe **antes** do combate (E); dentro da batalha não há troca. Cada um desbloqueia duas magias
-(barreiras 14 / projéteis 16 de dano base + bônus de absorção, 6 PM):
+Equipe **antes** do combate (E); dentro da batalha não há troca. Cada um desbloqueia suas magias
+(barragens 7 / projéteis 16 de dano base + bônus de absorção, 6 PM):
 
 | | 水 Sui — Amuleto da Água (Reino da Água) | 火 Ka — Amuleto de Fogo (Reino do Fogo) |
 |---|---|---|
-| Barreira | **Barragem de Água** — golpeia e bloqueia metade do próximo dano. *Fraca contra fogo* (só 25%). | **Barragem de Fogo** — círculo de chamas, bloqueia metade. *Fraco contra água* (só 25%). |
-| Projétil | **Pulso de Água** — *perfura* a defesa de espíritos de fogo. | **Incinerar** — *perfura* a defesa de espíritos de água. |
+| Barreira | **Barragem de Água** — bloqueia metade; contra Maré/magia de água e ataques elétricos do Vento, bloqueia só 25%. | **Barragem de Fogo** — círculo de chamas, bloqueia metade. *Fraca contra água* (só 25%). |
+| Projétil | **Pulso de Água** — *perfura* a defesa de espíritos de fogo. | **Incinerar** — *perfura* a defesa de espíritos de água e causa ×1,2 contra água fora de defesa. |
 
 A escolha importa: contra o Reino do Fogo, Sui dá ofensa perfurante mas defesa arriscada;
 Ka dá barreira confiável mas sem perfuração — e vice-versa no Reino da Água.

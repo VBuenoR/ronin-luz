@@ -230,7 +230,7 @@ const Game = {
           this.serpentGone = true;
           Sfx.darkTake();
           this.cam.shake = 7;
-          Hud.showBanner('闇', 'Katana da Escuridão', 'A magia Absorver desperta. Q alterna entre as lâminas.');
+          Hud.showBanner('闇', 'Katana da Escuridão', 'Absorver e Rajada Sombria despertam. Q alterna entre as lâminas.');
           Hud.toast('A serpente sorri — e se derrama na sua sombra.', '#c9a6ff');
           const dk2 = World.darkKatana;
           Particles.burst(dk2.x, dk2.y - 40, 26, () => ({
@@ -545,6 +545,9 @@ const Game = {
       LakeSerpentSystem.suspend(180);
     }
     if (World.current !== c.map) World.load(c.map);
+    if (typeof Enemies !== 'undefined' && typeof Enemies.respawnKatanaKills === 'function') {
+      Enemies.respawnKatanaKills();
+    }
     const p = this.player;
     p.x = c.x; p.y = c.y;
     p.vx = 0; p.vy = 0; p.dashT = 0;
@@ -1478,7 +1481,7 @@ const Game = {
       return;
     }
 
-    const optionsCount = 3; // 0: Continuar, 1: Volume Jogo, 2: Volume Música
+    const optionsCount = 4; // Continuar, Habilidades, Volume Jogo, Volume Música
 
     if (Input.pressed('up')) {
       this.pauseIdx = (this.pauseIdx + optionsCount - 1) % optionsCount;
@@ -1494,7 +1497,11 @@ const Game = {
         Sfx.confirm();
         this.state = this.prevState;
       }
-    } else if (this.pauseIdx === 1) { // Volume SFX
+    } else if (this.pauseIdx === 1) { // Habilidades
+      if (Input.pressed('confirm') && window.AbilityMenu) {
+        AbilityMenu.openMenu();
+      }
+    } else if (this.pauseIdx === 2) { // Volume SFX
       let change = 0;
       if (Input.pressed('left')) {
         change = -0.1;
@@ -1506,7 +1513,7 @@ const Game = {
         Sfx.setSfxVolume(Sfx.sfxVolume + change);
         Sfx.menuMove();
       }
-    } else if (this.pauseIdx === 2) { // Volume Música
+    } else if (this.pauseIdx === 3) { // Volume Música
       let change = 0;
       if (Input.pressed('left')) {
         change = -0.1;
@@ -1552,6 +1559,7 @@ const Game = {
     // 4. Desenhar as opções do menu
     const options = [
       { label: 'Continuar', type: 'button' },
+      { label: 'Habilidades', type: 'button' },
       { label: 'Som do Jogo (SFX)', type: 'slider', value: Sfx.sfxVolume },
       { label: 'Volume da Música', type: 'slider', value: Sfx.musicVolume }
     ];
@@ -1776,6 +1784,9 @@ const Game = {
     uiCtx.setTransform(viewScale, 0, 0, viewScale, viewOffX, viewOffY);
     if (this.state === 'explore') Hud.draw(uiCtx);
     else if (this.state === 'battle') Battle.drawUI(uiCtx, this.frames);
+    if (this.state === 'paused' && window.AbilityMenu && AbilityMenu.open) {
+      AbilityMenu.draw(uiCtx);
+    }
     if (this.state === 'explore' || this.state === 'battle' || this.state === 'paused') {
       this.drawDeveloperBadge(uiCtx);
     }

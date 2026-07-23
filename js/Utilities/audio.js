@@ -12,8 +12,8 @@ const Sfx = {
   windGain: null,
   windTarget: -1,
   leafTimer: 540,
-  musicPath: 'assets/audio/tidebound-shogun-ruins.mp3',
-  currentMusicPath: 'assets/audio/tidebound-shogun-ruins.mp3',
+  musicPath: 'assets/audio/Eternal Duality.mp3',
+  currentMusicPath: 'assets/audio/Eternal Duality.mp3',
   musicLevel: 0.10,
   sfxVolume: 0.8,
   musicVolume: 0.8,
@@ -94,8 +94,7 @@ const Sfx = {
     this.windGain = g;
   },
 
-  // Música licenciada do menu e do primeiro reino. O elemento permanece em
-  // loop silencioso fora da floresta para retomar sem corte ao atravessar o portal.
+  // Música licenciada do menu e dos reinos.
   startMusic() {
     if (!this.ctx || this.musicElement) return;
     const audio = new Audio();
@@ -138,11 +137,33 @@ const Sfx = {
     const menu = state === 'title' || state === 'intro';
     const firstRealm = realm === 'floresta' && (state === 'explore' || state === 'battle');
     const fireRealm = realm === 'fogo' && (state === 'explore' || state === 'battle');
-    const wantsMusic = menu || firstRealm || fireRealm;
+    const windRealm = realm === 'vento' && (state === 'explore' || state === 'battle');
+    const gardenRealm = realm === 'jardim' && (state === 'explore' || state === 'battle');
+    const wantsMusic = menu || firstRealm || fireRealm || windRealm || gardenRealm;
 
-    let desiredPath = 'assets/audio/tidebound-shogun-ruins.mp3';
-    if (fireRealm) {
+    let desiredPath = 'assets/audio/Eternal Duality.mp3';
+
+    const isBattle = state === 'battle' && typeof Battle !== 'undefined' && Battle.active && Battle.E;
+    const isBossFight = isBattle && (Battle.E.isBoss || Battle.E.tier === 9 || Battle.E.tier === 10 || Battle.E.tier === 13);
+
+    if (isBossFight) {
+      if (realm === 'fogo' || Battle.E.tier === 10 || Battle.E.element === 'fogo') {
+        desiredPath = 'assets/audio/Magma Shogun.mp3';
+      } else if (realm === 'vento' || Battle.E.tier === 13 || Battle.E.element === 'vento') {
+        desiredPath = 'assets/audio/Clouds of the False God.mp3';
+      } else {
+        desiredPath = 'assets/audio/Abyssal Shogun.mp3';
+      }
+    } else if (menu) {
+      desiredPath = 'assets/audio/Eternal Duality.mp3';
+    } else if (fireRealm) {
       desiredPath = 'assets/audio/Molten Shrine March.mp3';
+    } else if (windRealm) {
+      desiredPath = 'assets/audio/Cloud Palace Monastery.mp3';
+    } else if (gardenRealm) {
+      desiredPath = 'assets/audio/Moss on Stone.mp3';
+    } else if (firstRealm) {
+      desiredPath = 'assets/audio/tidebound-shogun-ruins.mp3';
     }
 
     if (wantsMusic && this.currentMusicPath !== desiredPath) {
@@ -196,6 +217,8 @@ const Sfx = {
     else if (state === 'intro') wind = 0.068;
     else if (surfaceForest && state === 'explore') wind = 0.085;
     else if (realm === 'floresta') wind = 0.048;
+    else if (realm === 'vento') wind = 0.095;
+    else if (realm === 'jardim') wind = 0.035;
 
     if (Math.abs(wind - this.windTarget) > 0.001) {
       this.windTarget = wind;

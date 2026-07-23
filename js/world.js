@@ -228,6 +228,9 @@ const World = {
 
   load(id) {
     this.current = id;
+    if (typeof Enemies !== 'undefined' && typeof Enemies.respawnKatanaKills === 'function') {
+      Enemies.respawnKatanaKills();
+    }
     const m = this.maps[id];
     this.solids = m.solids;
     this.oneways = m.oneways;

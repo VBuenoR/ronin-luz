@@ -127,7 +127,7 @@ const Battle = {
       cocoonHealPct: Number.isFinite(cfg.cocoonHealPct) ? cfg.cocoonHealPct : 0.10,
       ancestralMarkImmune: ['ashSkeleton', 'ancientGolem'].includes(cfg.archetype || fieldEnemy.archetype),
       vulcanoCharged: false, cocoonTurns: 0, cocoonUsed: false,
-      storm: !!cfg.storm, stormPhase: false, evadePhysical: false,
+      storm: !!cfg.storm, stormPhase: false, tornadoCharged: false, evadePhysical: false,
       defending: false, fatigued: false, script: [], flash: 0, hitT: 0,
       aura: 0, dissolve: 0, et: U.rand(0, 100)
     };
@@ -148,7 +148,9 @@ const Battle = {
         dur: 70,
         msg: this.E.element === 'fogo'
           ? 'A caverna inteira range — Kagutsuchi, o Shōgun das Cinzas, desperta!'
-          : 'O lago inteiro se ergue — Suijin, o Shōgun Afogado, desperta!'
+          : this.E.element === 'vento'
+            ? 'O céu inteiro se curva — Fujin, o Rei do Vento, desperta!'
+            : 'O lago inteiro se ergue — Suijin, o Shōgun Afogado, desperta!'
       });
     } else {
       const artigo = this.E.short.startsWith('a ') ? 'Uma' : 'Um';
@@ -317,11 +319,12 @@ const Battle = {
     ];
   },
 
-  // dano mágico cresce +4 por espírito absorvido, com base +3 se empunhar a lâmina escura
-  mAtk() {
-    let base = Game.wielded === 'dark' ? 3 : 0;
-    return base + Game.absorbed * 4;
-  },
+  // Dano mágico dos amuletos cresce apenas com espíritos absorvidos.
+  // Empunhar a Katana da Escuridão, por si só, não altera essas artes.
+  mAtk() { return Game.absorbed * 4; },
+
+  // Rajada Sombria possui progressão própria: 15, 20, 25... por absorção.
+  darkBoltDamage() { return 15 + Game.absorbed * 5; },
 
   ancestralAmuletActive() {
     return Game.fireAmuletForm === 'ancestral' && Game.equipped === 'ka';
@@ -356,7 +359,7 @@ const Battle = {
     const cocoonLocked = this.E.archetype === 'ancientGolem' && this.E.cocoonTurns > 0;
     const lh = this.lightHeal();
     const cura = lh > 0 ? ` A luz cura +${lh} ao conjurar.` : '';
-    const c4 = this.magicCost(4), c5 = this.magicCost(5);
+    const c4 = this.magicCost(4);
     const c6 = this.magicCost(6), c7 = this.magicCost(7);
     const opts = [
       { id: 'dluz', label: '盾  Defesa da Luz', ok: P.mp >= c6 && light && !Game.essenceLost,
@@ -364,7 +367,11 @@ const Battle = {
         why: Game.essenceLost ? 'Sua essência está perdida — recupere-a para reaver este poder.'
           : !light ? 'A luz não responde à lâmina negra — Q para trocar.' : `PM insuficiente (precisa de ${c6}).` },
       { id: 'pur', label: '浄  Purificar', ok: P.mp >= c7 && light && !cocoonLocked,
-        desc: `Vida ≤${this.E.isBoss ? '15% (chefe)' : '20%'}: purificação garantida (+3 PV máx). Abaixo de 50%: chance de 5%. Custa ${c7} PM.`,
+        desc: `Vida ≤${this.E.isBoss ? '15% (chefe)' : '20%'}: purificação garantida (+3 PV máx). `
+          + (this.E.isBoss
+            ? 'Entre esse limite e 50%: chance de 5%.'
+            : 'Até 50%: Iluminado concede 20% de chance.')
+          + ` Custa ${c7} PM.`,
         why: cocoonLocked ? 'O casulo bloqueia a reivindicação — use Pulso de Água.'
           : !light ? 'A Katana de Luz dorme na bainha — Q para trocar.' : `PM insuficiente (precisa de ${c7}).` }
     ];
@@ -376,16 +383,14 @@ const Battle = {
       opts.push({ id: 'ftrevas', label: '暗  Força das Trevas', ok: P.mp >= c4 && !light,
         desc: `Poder sombrio: crítico garantido nos próximos 2 ATAQUES físicos. Custa ${c4} PM.`,
         why: light ? 'Empunhe a Katana da Escuridão — Q para trocar.' : `PM insuficiente (precisa de ${c4}).` });
-      if (Game.absorbed >= 1) {
-        opts.push({ id: 'bolt', label: '呪  Rajada Sombria', ok: P.mp >= c5 && !light,
-          desc: `Descarga do poder devorado: ${8 + this.mAtk()} de dano.${cura} Custa ${c5} PM.`,
-          why: light ? 'Empunhe a Katana da Escuridão — Q para trocar.' : `PM insuficiente (precisa de ${c5}).` });
-      }
+      opts.push({ id: 'bolt', label: '呪  Rajada Sombria', ok: P.mp >= c6 && !light,
+        desc: `Descarga do poder devorado: ${this.darkBoltDamage()} de dano.${cura} Custa ${c6} PM.`,
+        why: light ? 'Empunhe a Katana da Escuridão — Q para trocar.' : `PM insuficiente (precisa de ${c6}).` });
     }
-    const md = 14 + this.mAtk(), pd = 16 + this.mAtk();
+    const md = 7 + this.mAtk(), pd = 16 + this.mAtk();
     if (Game.equipped === 'sui') {
       opts.push({ id: 'bagua', label: '水  Barragem de Água', ok: P.mp >= c6,
-        desc: `${md} de dano e ergue uma barreira fluida (bloqueia metade do dano).${cura} Custa ${c6} PM.`,
+        desc: `${md} de dano e ergue uma barreira fluida (bloqueia 50%; apenas 25% contra água e eletricidade).${cura} Custa ${c6} PM.`,
         why: `PM insuficiente (precisa de ${c6}).` });
       opts.push({ id: 'pulso', label: '水  Pulso de Água', ok: P.mp >= c6,
         desc: `Rajada à distância: ${pd} de dano. PERFURA a defesa de espíritos de fogo.${cura} Custa ${c6} PM.`,
@@ -518,10 +523,13 @@ const Battle = {
   // limiar de reivindicação: 20% para espíritos comuns, 15% para chefes
   claimThreshold() { return this.E.isBoss ? 0.15 : 0.20; },
 
-  // chance de reivindicar o espírito (purificar ou absorver)
-  claimChance(pct) {
+  // Chance de reivindicar o espírito. Iluminado favorece somente Purificar
+  // contra inimigos comuns; chefes e Absorver mantêm os 5% originais.
+  claimChance(pct, method) {
     if (pct <= this.claimThreshold() + 0.001) return 1;
-    if (pct < 0.5) return 0.05;
+    if (pct <= 0.5) {
+      return method === 'purify' && !this.E.isBoss ? 0.20 : 0.05;
+    }
     return 0;
   },
 
@@ -877,7 +885,7 @@ const Battle = {
         Sfx.tone({ f: 784, dur: 0.5, type: 'sine', vol: 0.1, delay: 0.15 });
       }
     });
-    if (U.chance(this.claimChance(pct))) {
+    if (U.chance(this.claimChance(pct, 'purify'))) {
       this.purifySequence();
     } else {
       const failMsg = pct >= 0.5
@@ -901,7 +909,7 @@ const Battle = {
         Sfx.absorb();
       }
     });
-    if (U.chance(this.claimChance(pct))) {
+    if (U.chance(this.claimChance(pct, 'absorb'))) {
       this.absorbSequence();
     } else {
       const failMsg = pct >= 0.5
@@ -950,11 +958,11 @@ const Battle = {
   },
 
   // Rajada Sombria: 5 formação + 7 aceleração + 6 rotação + 9 impacto
-  // + 9 dissipação. Total visual: 36 frames, mantendo dano e custo originais.
+  // + 9 dissipação. Total visual: 36 frames.
   actDarkBolt() {
     this.closeMenu();
-    this.spendMagic(5);
-    const dmg = this.finalDmg(8 + this.mAtk());
+    this.spendMagic(6);
+    const dmg = this.finalDmg(this.darkBoltDamage());
     this.push({
       dur: 5,
       msg: '呪 — O poder devorado ruge para fora da lâmina!',
@@ -1189,8 +1197,7 @@ const Battle = {
     this.push({ dur: 1, on: () => this.afterPlayer() });
   },
 
-  resolveFireImpact(dmg, pierce) {
-    const isCrit = this.E.element === 'agua';
+  resolveFireImpact(dmg, pierce, isWaterBonus) {
     if (this.tryAbsorbEnemyFire(dmg)) {
       PlayerVFX.impact(this.EX, this.EY - 50, 'fire', false);
       this.castHeal();
@@ -1199,28 +1206,28 @@ const Battle = {
     this.E.hp = Math.max(0, this.E.hp - dmg);
     this.E.flash = 1;
     this.E.hitT = 15;
-    this.shake = isCrit ? 12 : 0;
-    this.shakeX = pierce ? -9.2 : -7.2;
+    this.shake = (pierce || isWaterBonus) ? 12 : 0;
+    this.shakeX = pierce ? -9.2 : (isWaterBonus ? -8.5 : -7.2);
     this.shakeY = pierce ? -1.2 : 0;
-    Game.cam.zoom = isCrit ? 1.45 : (pierce ? 1.4 : 1.35);
-    Game.freezeFrames = isCrit ? 8 : (pierce ? 7 : 5);
-    this.floater(this.EX, this.EY - 80, '-' + dmg, isCrit ? '#ffe08a' : '#ffb067', isCrit);
-    if (isCrit) {
-      this.msg = 'CRÍTICO! Incinerar provoca uma implosão interna no espírito da água!';
-      this.msgT = 0;
-    } else if (pierce) {
+    Game.cam.zoom = (pierce || isWaterBonus) ? 1.4 : 1.35;
+    Game.freezeFrames = isWaterBonus ? 6 : (pierce ? 7 : 5);
+    this.floater(this.EX, this.EY - 80, '-' + dmg, isWaterBonus ? '#ffe08a' : '#ffb067', isWaterBonus);
+    if (pierce) {
       this.msg = 'O elemento oposto PERFURA a couraça!';
       this.msgT = 0;
+    } else if (isWaterBonus) {
+      this.msg = 'VANTAGEM ELEMENTAL! Incinerar vaporiza o espírito da água! (×1.2 de dano)';
+      this.msgT = 0;
     }
-    PlayerVFX.impact(this.EX, this.EY - 50, 'fire', isCrit || pierce);
-    EnemyVFX.hit(this.E, this.EX, this.EY - 50, isCrit || pierce);
+    PlayerVFX.impact(this.EX, this.EY - 50, 'fire', pierce || isWaterBonus);
+    EnemyVFX.hit(this.E, this.EX, this.EY - 50, pierce || isWaterBonus);
     this.castHeal();
-    Sfx.hit(isCrit || pierce);
+    Sfx.hit(pierce || isWaterBonus);
   },
 
   // Incinerar usa o mesmo compasso legível de Pulso, mas com silhueta de
   // lança, aceleração seca e uma detonação que se abre como flor de fogo.
-  actFireIncinerate(dmg, pierce) {
+  actFireIncinerate(dmg, pierce, isWaterBonus) {
     this.push({
       dur: 15,
       msg: '火 — Incinerar!',
@@ -1243,7 +1250,7 @@ const Battle = {
       }
     });
     this.push({ dur: 12 });
-    this.push({ dur: 5, on: () => this.resolveFireImpact(dmg, pierce) });
+    this.push({ dur: 5, on: () => this.resolveFireImpact(dmg, pierce, isWaterBonus) });
     this.push({
       dur: 24,
       on: () => {
@@ -1327,7 +1334,7 @@ const Battle = {
   actBarrier(elem) {
     this.closeMenu();
     this.spendMagic(6);
-    const dmg = this.finalDmg(14 + this.mAtk());
+    const dmg = this.finalDmg(7 + this.mAtk());
     const agua = elem === 'agua';
     if (agua) {
       this.actWaterBarrier(dmg);
@@ -1340,14 +1347,16 @@ const Battle = {
     this.closeMenu();
     this.spendMagic(6);
     const agua = elem === 'agua';
-    const isCrit = elem === 'fogo' && this.E.element === 'agua'; // Incinerar contra espírito de água
     const pierce = this.E.defending && (
       (elem === 'agua' && this.E.element === 'fogo') ||
       (elem === 'fogo' && this.E.element === 'agua') ||
       (elem === 'wind' && this.E.element === 'agua')
     );
+    const isWaterBonus = elem === 'fogo' && this.E.element === 'agua' && !this.E.defending;
     let baseDmg = 16 + this.mAtk();
-    if (isCrit) baseDmg *= 2; // Dano crítico!
+    if (isWaterBonus) {
+      baseDmg = Math.round(baseDmg * 1.2);
+    }
     const dmg = this.finalDmg(baseDmg, pierce);
     if (agua) {
       this.actWaterPulse(dmg, pierce);
@@ -1357,7 +1366,7 @@ const Battle = {
       this.actWindTornado(dmg, pierce);
       return;
     }
-    this.actFireIncinerate(dmg, pierce);
+    this.actFireIncinerate(dmg, pierce, isWaterBonus);
   },
 
   actFlee() {
@@ -1452,6 +1461,7 @@ const Battle = {
 
   enterStormPhaseSequence() {
     this.E.stormPhase = true;
+    this.E.tornadoCharged = false;
     this.E.ult = Math.round(this.E.ult * 1.3);
     this.closeMenu();
     this.push({
@@ -1546,16 +1556,16 @@ const Battle = {
       if (this.E.isBoss) {
         if (this.E.stormPhase) {
           const patterns = [
-            ['tornado', 'vendaval', 'suprema', 'investida', 'prisao'],
-            ['suprema', 'investida', 'vendaval', 'prisao', 'tornado'],
-            ['tornado', 'prisao', 'suprema', 'vendaval', 'investida']
+            ['tornadoCharge', 'tornado', 'vendaval', 'suprema', 'investida', 'prisao'],
+            ['suprema', 'investida', 'vendaval', 'prisao', 'tornadoCharge', 'tornado'],
+            ['tornadoCharge', 'tornado', 'prisao', 'suprema', 'vendaval', 'investida']
           ];
           this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
         } else {
           const patterns = [
-            ['vendaval', 'defend', 'investida', 'prisao', 'tornado'],
-            ['tornado', 'soco', 'investida', 'defend', 'prisao'],
-            ['prisao', 'vendaval', 'defend', 'tornado', 'investida']
+            ['vendaval', 'defend', 'investida', 'prisao', 'tornadoCharge', 'tornado'],
+            ['tornadoCharge', 'tornado', 'soco', 'investida', 'defend', 'prisao'],
+            ['prisao', 'vendaval', 'defend', 'tornadoCharge', 'tornado', 'investida']
           ];
           this.E.script = patterns[Math.floor(Math.random() * patterns.length)].slice();
         }
@@ -2095,7 +2105,7 @@ const Battle = {
         dur: 8,
         on: () => {
           this.lightningFlash = 4;
-          this.hitPlayer(this.E.soco, 'windMagic');
+          this.hitPlayer(this.E.soco, 'electricMagic');
         }
       });
       this.push({
@@ -2123,7 +2133,7 @@ const Battle = {
         dur: 8,
         on: () => {
           this.lightningFlash = 5;
-          this.hitPlayer(Math.round(this.E.soco * 1.3), 'windMagic', true);
+          this.hitPlayer(Math.round(this.E.soco * 1.3), 'electricMagic', true);
         }
       });
       this.push({
@@ -2174,7 +2184,7 @@ const Battle = {
         dur: 8,
         on: () => {
           this.lightningFlash = 6;
-          this.hitPlayer(Math.round(this.E.mare * 1.15), 'windMagic', true);
+          this.hitPlayer(Math.round(this.E.mare * 1.15), 'electricMagic', true);
           if (this.P.hp > 0) {
             const defFactor = (this.playerDef || this.playerHoly || this.playerBarrier);
             const paraChance = defFactor ? 0.15 : 0.75;
@@ -2274,7 +2284,29 @@ const Battle = {
           Game.cam.targetOffsetX = 0;
         }
       });
+    } else if (action === 'tornadoCharge') {
+      this.E.tornadoCharged = true;
+      this.push({
+        dur: 45,
+        msg: 'CARGA DE VENTO! O Rei do Vento comprime as correntes ao redor da lâmina — o Tornado vem a seguir!',
+        on: () => {
+          this.anim.e = 'charge';
+          EnemyVFX.charge(this.E, this.EX, this.EY - 24);
+          Sfx.windCharge();
+          Game.cam.targetZoom = 1.2;
+          Game.cam.targetOffsetX = -34;
+        }
+      });
+      this.push({
+        dur: 18,
+        on: () => {
+          this.anim.e = 'idle';
+          Game.cam.targetZoom = 1.12;
+          Game.cam.targetOffsetX = 0;
+        }
+      });
     } else if (action === 'tornado') {
+      this.E.tornadoCharged = false;
       this.push({
         dur: 24,
         msg: 'TORNADO! Um turbilhão espiral de vento varre toda a arena!',
@@ -2339,7 +2371,7 @@ const Battle = {
       });
       this.push({ dur: 18, on: () => {
         this.lightningFlash = 8;
-        this.hitPlayer(this.E.ult, 'windMagic', true);
+        this.hitPlayer(this.E.ult, 'electricMagic', true);
       } });
       this.push({
         dur: 30,
@@ -2381,7 +2413,8 @@ const Battle = {
 
   hitPlayer(base, kind, big) {
     const damageType = ({
-      fogo: 'fireMagic', agua: 'waterMagic', vento: 'windMagic', fisico: 'physical'
+      fogo: 'fireMagic', agua: 'waterMagic', vento: 'windMagic',
+      eletrico: 'electricMagic', fisico: 'physical'
     })[kind] || kind;
     let dmg = base;
     let note = null;
@@ -2393,13 +2426,21 @@ const Battle = {
       dmg = Math.max(1, Math.floor(dmg * 0.25));
       note = '盾 a luz apara!';
     } else if (this.playerBarrier) {
-      // barreira elemental: fraca contra o elemento oposto (apenas água apaga barreira de fogo, fogo não evapora a de água)
-      const weak = (damageType === 'waterMagic' && this.playerBarrier === 'fogo');
+      // A barragem de fogo é fraca contra água. A barragem de água perde
+      // eficiência contra Maré/magia de água e contra ataques elétricos.
+      const weakToWater = damageType === 'waterMagic'
+        && (this.playerBarrier === 'fogo' || this.playerBarrier === 'agua');
+      const weakToElectric = damageType === 'electricMagic' && this.playerBarrier === 'agua';
+      const weak = weakToWater || weakToElectric;
       barrierWeak = weak;
       dmg = Math.max(1, Math.floor(dmg * (weak ? 0.75 : 0.5)));
-      note = weak
-        ? 'A água APAGA a barragem!'
-        : '障 barragem: metade!';
+      note = weakToElectric
+        ? 'A eletricidade ATRAVESSA a barragem!'
+        : weakToWater && this.playerBarrier === 'agua'
+          ? 'A maré ROMPE a barragem!'
+          : weakToWater
+            ? 'A água APAGA a barragem!'
+            : '障 barragem: metade!';
     } else if (this.playerDef) {
       const reduction = this.playerParaT > 0 ? 0.75 : 0.5;
       dmg = Math.max(1, Math.floor(dmg * reduction));
@@ -2443,6 +2484,7 @@ const Battle = {
     Sfx.hurt();
     const col = damageType === 'waterMagic' ? '#7fd4ff'
       : damageType === 'fireMagic' ? '#75d9ff'
+      : damageType === 'electricMagic' ? '#ffe178'
       : damageType === 'windMagic' ? '#9ee8c8'
       : '#ffffff';
     this.floater(this.PX, this.PY - 90, '-' + formatAmount(dmg), col, big);
@@ -2484,7 +2526,7 @@ const Battle = {
         ? 'water'
         : damageType === 'fireMagic'
           ? 'fire'
-          : damageType === 'windMagic'
+          : (damageType === 'windMagic' || damageType === 'electricMagic')
             ? 'wind'
             : 'physical';
       PlayerVFX.block(this.PX, this.PY, shieldKind, incomingVfx);
@@ -2492,7 +2534,7 @@ const Battle = {
     else PlayerVFX.impact(this.PX, this.PY - 42,
       damageType === 'waterMagic' ? 'water'
         : damageType === 'fireMagic' ? 'fire'
-          : damageType === 'windMagic' ? 'wind' : 'guard', !!big);
+          : (damageType === 'windMagic' || damageType === 'electricMagic') ? 'wind' : 'guard', !!big);
   },
 
   afterEnemy() {
@@ -2740,7 +2782,6 @@ const Battle = {
       this.push({
         dur: 55,
         msg: '☾ O poder devorado: +4 de dano mágico.' + (atkUp ? '  A fome afia a lâmina: +2 de dano!' : '')
-          + (Game.absorbed === 1 ? '  Rajada Sombria despertou.' : '')
       });
     }
     for (const lv of levelsGained) {
@@ -3549,6 +3590,7 @@ const Battle = {
           paralisante: { k: '痺', c: '110,210,255', danger: true, label: `${S} vai soltar uma carga paralisante` },
           vendaval:  { k: '斬', c: '150,200,245', danger: true, label: `${S} vai cortar com o vendaval` },
           investida: { k: '翔', c: '150,200,245', danger: true, label: `${S} vai fazer uma investida` },
+          tornadoCharge: { k: '蓄', c: '150,220,245', danger: true, label: `${S} vai carregar o Tornado` },
           tornado:   { k: '旋', c: '150,200,245', danger: true, label: `${S} vai invocar um tornado` },
           prisao:    { k: '牢', c: '150,200,245', danger: true, label: `${S} vai conjurar a prisão de vento` },
           suprema:   { k: '嵐', c: '120,180,245', danger: true, label: `${S} vai desferir a tempestade suprema` }
@@ -3755,21 +3797,6 @@ const Battle = {
         ctx.arc(spark.x, spark.y, spark.size * (0.5 + alpha), 0, 7);
         ctx.fill();
       }
-      ctx.restore();
-    }
-
-    // ── mensagem ──
-    if (this.msg && (this.q.length || this.msgT < 220)) {
-      const shown = this.msg.slice(0, Math.floor(this.msgT * 1.6));
-      ctx.save();
-      ctx.fillStyle = 'rgba(6,10,22,0.8)';
-      ctx.fillRect(160, 96, 640, 40);
-      ctx.strokeStyle = 'rgba(255,214,130,0.35)';
-      ctx.strokeRect(160, 96, 640, 40);
-      ctx.fillStyle = '#f4e6c4';
-      ctx.font = '15px "Segoe UI", sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(shown, 480, 117);
       ctx.restore();
     }
 

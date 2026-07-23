@@ -30,11 +30,11 @@ const SpiritOfLight = {
       Game.hpPenalty = penalty;
       Game.essenceLost = true;
     }
-    // vida do Espírito = 75% da vida máxima ORIGINAL (antes da penalidade)
+    // vida do Espírito = 50% da vida máxima ORIGINAL (antes da penalidade)
     const originalMax = p.maxHp + Game.hpPenalty;
     Game.essence = {
       map, x, y,
-      spiritHp: Math.max(12, Math.round(originalMax * 0.75)),
+      spiritHp: Math.max(12, Math.round(originalMax * 0.50)),
       t: Math.random() * 100,
       born: 0,
       armed: true   // gatilho re-arma só quando o jogador deixa o raio

@@ -520,5 +520,13 @@ const Enemies = {
 
   update(p) { for (const e of this.list) e.update(p); },
 
-  draw(ctx, cam, frames) { for (const e of this.list) e.draw(ctx, cam, frames); }
+  draw(ctx, cam, frames) { for (const e of this.list) e.draw(ctx, cam, frames); },
+
+  respawnKatanaKills() {
+    for (const e of this.list) {
+      if (e.dead && !e.purified && !e.absorbed && !e.isBoss) {
+        e.revive();
+      }
+    }
+  }
 };
